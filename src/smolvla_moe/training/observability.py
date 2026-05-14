@@ -7,9 +7,11 @@ import subprocess
 import time
 from typing import Any
 
+import psutil
 import torch
+import wandb
 
-from smolvla_moe.data import VLABatch
+from smolvla_moe.data.batch import VLABatch
 
 
 class JsonlLogger:
@@ -26,7 +28,6 @@ class JsonlLogger:
 class WandbLogger:
     def __init__(self, config: dict[str, Any], output_dir: Path, rank: int) -> None:
         self.run = None
-        self.wandb = None
         self.enabled = False
         self.output_dir = output_dir
         self.config = config
@@ -34,12 +35,6 @@ class WandbLogger:
         if rank != 0 or not bool(self.wandb_config.get("enabled", False)):
             return
 
-        try:
-            import wandb
-        except ImportError as exc:
-            raise ImportError("wandb logging is enabled, but wandb is not installed.") from exc
-
-        self.wandb = wandb
         self.enabled = True
         self.output_dir.mkdir(parents=True, exist_ok=True)
         init_kwargs = self._init_kwargs()
@@ -71,14 +66,14 @@ class WandbLogger:
             tiled = torch.cat([camera for camera in sample], dim=2)
             tiled = (tiled.permute(1, 2, 0).numpy() * 255).astype("uint8")
             caption = None if batch.language is None else batch.language[sample_idx]
-            images.append(self.wandb.Image(tiled, caption=caption))
+            images.append(wandb.Image(tiled, caption=caption))
         if images:
             self.run.log({"train/camera_views": images}, step=step)
 
     def log_checkpoint(self, checkpoint_path: Path, step: int, aliases: list[str] | None = None) -> None:
         if self.run is None or not bool(self.wandb_config.get("log_checkpoints", False)):
             return
-        artifact = self.wandb.Artifact(name=f"{self.run.name}-checkpoint", type="model")
+        artifact = wandb.Artifact(name=f"{self.run.name}-checkpoint", type="model")
         artifact.add_file(str(checkpoint_path))
         self.run.log_artifact(artifact, aliases=aliases or [f"step-{step}"])
 
@@ -130,11 +125,11 @@ class WandbLogger:
     def _define_metrics(self) -> None:
         if self.run is None:
             return
-        self.wandb.define_metric("train/step")
-        self.wandb.define_metric("train/*", step_metric="train/step")
-        self.wandb.define_metric("performance/*", step_metric="train/step")
-        self.wandb.define_metric("resource/*", step_metric="train/step")
-        self.wandb.define_metric("moe/*", step_metric="train/step")
+        wandb.define_metric("train/step")
+        wandb.define_metric("train/*", step_metric="train/step")
+        wandb.define_metric("performance/*", step_metric="train/step")
+        wandb.define_metric("resource/*", step_metric="train/step")
+        wandb.define_metric("moe/*", step_metric="train/step")
 
 
 def collect_resource_metrics() -> dict[str, float]:
@@ -184,10 +179,6 @@ def _collect_gpu_metrics() -> dict[str, float]:
 
 
 def _collect_cpu_metrics() -> dict[str, float]:
-    try:
-        import psutil
-    except ImportError:
-        return {}
     virtual = psutil.virtual_memory()
     return {
         "resource/cpu_percent": float(psutil.cpu_percent(interval=None)),

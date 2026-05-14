@@ -3,12 +3,6 @@ model:
     type: hf_smolvlm2
     model_name: HuggingFaceTB/SmolVLM2-500M-Video-Instruct
     hidden_dim: 960
-    context_dim: 960
-    max_text_len: 128
-    image_size: 256
-    freeze: false
-    gradient_checkpointing: true
-    trust_remote_code: true
     torch_dtype: bfloat16
   action_decoder:
     hidden_dim: 768
@@ -20,11 +14,8 @@ model:
     ffn_mult: 4
     dropout: 0.0
     moe:
-      enabled: true
       num_routed_experts: 4
       top_k: 1
-      shared_expert: true
-      routing: chunk
       load_balance_weight: 0.01
       router_z_loss_weight: 0.0001
   flow:

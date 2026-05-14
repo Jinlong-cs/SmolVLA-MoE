@@ -126,20 +126,16 @@ def _start_server(args: argparse.Namespace, root: Path, server_log: Path) -> sub
 
 
 def _wait_for_health(host: str, port: int, timeout_s: float = 240.0) -> None:
-    import urllib.request
+    import socket
 
     deadline = time.time() + timeout_s
-    url = f"http://{host}:{port}/healthz"
-    last_error: Exception | None = None
     while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(url, timeout=5) as response:
-                if response.status == 200:
-                    return
-        except Exception as exc:
-            last_error = exc
-            time.sleep(2)
-    raise TimeoutError(f"Policy server did not become healthy at {url}: {last_error}")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(5)
+            if sock.connect_ex((host, port)) == 0:
+                return
+        time.sleep(2)
+    raise TimeoutError(f"Policy server did not open a TCP listener at {host}:{port}")
 
 
 def _eval_env(openpi_root: str, repo_root: Path) -> dict[str, str]:

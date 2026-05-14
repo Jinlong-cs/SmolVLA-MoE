@@ -11,7 +11,7 @@ cd /workspace/SmolVLA-MoE
 python -m venv .venv
 source .venv/bin/activate
 pip install -U pip
-pip install -e ".[hf,train]"
+pip install -e .
 python -m compileall src scripts
 ```
 

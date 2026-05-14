@@ -4,6 +4,7 @@ from typing import Any
 
 import torch
 from torch import nn
+from transformers import AutoModelForImageTextToText
 
 
 class HFSmolVLM2Backbone(nn.Module):
@@ -15,29 +16,13 @@ class HFSmolVLM2Backbone(nn.Module):
 
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__()
-        try:
-            from transformers import AutoModelForImageTextToText
-        except ImportError as exc:
-            raise ImportError("Install SmolVLA-MoE with the `hf` extra to use hf_smolvlm2 backbones.") from exc
-
-        model_name = str(config["model_name"])
-        trust_remote_code = bool(config.get("trust_remote_code", True))
-        self.freeze = bool(config.get("freeze", True))
-        kwargs: dict[str, Any] = {"trust_remote_code": trust_remote_code}
-        torch_dtype = _torch_dtype(config.get("torch_dtype", "auto"))
-        if torch_dtype is not None:
-            kwargs["torch_dtype"] = torch_dtype
-        attn_implementation = config.get("attn_implementation")
-        if attn_implementation not in (None, "", "null"):
-            kwargs["attn_implementation"] = str(attn_implementation)
-        self.model = AutoModelForImageTextToText.from_pretrained(model_name, **kwargs)
-        self.hidden_dim = _infer_hidden_dim(self.model.config)
-        if bool(config.get("gradient_checkpointing", False)) and hasattr(self.model, "gradient_checkpointing_enable"):
-            self.model.gradient_checkpointing_enable()
-
-        if self.freeze:
-            self.model.requires_grad_(False)
-            self.model.eval()
+        self.hidden_dim = int(config["hidden_dim"])
+        self.model = AutoModelForImageTextToText.from_pretrained(
+            str(config["model_name"]),
+            trust_remote_code=True,
+            torch_dtype=_torch_dtype(config["torch_dtype"]),
+        )
+        self.model.gradient_checkpointing_enable()
 
     def forward(
         self,
@@ -47,28 +32,16 @@ class HFSmolVLM2Backbone(nn.Module):
         extras: dict[str, Any] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         del images, input_ids, attention_mask
-        hf_inputs = None if extras is None else extras.get("hf_inputs")
-        if hf_inputs is None:
-            raise ValueError(
-                "hf_smolvlm2 backbone requires batch.extras['hf_inputs'] from the matching Hugging Face processor."
-            )
+        hf_inputs = extras["hf_inputs"]
         model = getattr(self.model, "model", self.model)
         forward_kwargs = dict(hf_inputs)
         forward_kwargs.update({"output_hidden_states": False, "return_dict": True, "use_cache": False})
-        with torch.set_grad_enabled(not self.freeze):
-            outputs = model(**forward_kwargs)
-        hidden = getattr(outputs, "last_hidden_state", None)
-        if hidden is None:
-            hidden = outputs[0]
-        mask = hf_inputs.get("attention_mask")
-        return hidden, mask
+        outputs = model(**forward_kwargs)
+        return outputs.last_hidden_state, hf_inputs["attention_mask"]
 
 
 def build_backbone(config: dict[str, Any]) -> nn.Module:
-    backbone_type = str(config.get("type", "hf_smolvlm2"))
-    if backbone_type == "hf_smolvlm2":
-        return HFSmolVLM2Backbone(config)
-    raise ValueError(f"Unsupported backbone type: {backbone_type}")
+    return HFSmolVLM2Backbone(config)
 
 
 def _torch_dtype(value: Any) -> torch.dtype | str | None:
@@ -84,15 +57,3 @@ def _torch_dtype(value: Any) -> torch.dtype | str | None:
     if name in {"float32", "fp32", "torch.float32"}:
         return torch.float32
     raise ValueError(f"Unsupported torch_dtype: {value}")
-
-
-def _infer_hidden_dim(config: Any) -> int:
-    for path in (("text_config", "hidden_size"), ("hidden_size",), ("vision_config", "hidden_size")):
-        cursor = config
-        for key in path:
-            cursor = getattr(cursor, key, None)
-            if cursor is None:
-                break
-        if cursor is not None:
-            return int(cursor)
-    raise ValueError("Could not infer hidden size from Hugging Face model config.")

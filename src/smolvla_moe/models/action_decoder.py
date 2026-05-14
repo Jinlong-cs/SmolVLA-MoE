@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from torch import nn
 
 from smolvla_moe.models.moe import SparseMoE
-from smolvla_moe.models.moe import SwiGLUExpert
 
 
 def timestep_embedding(timesteps: torch.Tensor, dim: int) -> torch.Tensor:
@@ -44,12 +43,7 @@ class ActionDecoderBlock(nn.Module):
                 "dropout": dropout,
             }
         )
-        self.use_moe = bool(moe_config.get("enabled", True))
-        if self.use_moe:
-            self.ffn = SparseMoE(moe_config)
-        else:
-            inner_dim = int(hidden_dim * float(config.get("ffn_mult", 4)))
-            self.ffn = SwiGLUExpert(hidden_dim, inner_dim, dropout=dropout)
+        self.ffn = SparseMoE(moe_config)
 
     def forward(
         self,
@@ -67,11 +61,7 @@ class ActionDecoderBlock(nn.Module):
             need_weights=False,
         )[0]
 
-        aux: dict[str, torch.Tensor] = {}
-        if self.use_moe:
-            ffn_out, aux = self.ffn(self.ffn_norm(x), router_context=router_context)
-        else:
-            ffn_out = self.ffn(self.ffn_norm(x))
+        ffn_out, aux = self.ffn(self.ffn_norm(x), router_context=router_context)
         x = x + ffn_out
         return x, aux
 

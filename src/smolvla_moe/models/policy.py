@@ -19,8 +19,7 @@ class SmolVLAMoEPolicy(nn.Module):
         decoder_config = dict(model_config["action_decoder"])
 
         self.backbone = build_backbone(backbone_config)
-        context_dim = int(getattr(self.backbone, "hidden_dim", backbone_config.get("context_dim", decoder_config["hidden_dim"])))
-        self.action_decoder = FlowMatchingActionDecoder(decoder_config, context_dim=context_dim)
+        self.action_decoder = FlowMatchingActionDecoder(decoder_config, context_dim=self.backbone.hidden_dim)
         self.flow = FlowMatchingObjective(model_config.get("flow", {}))
 
     def encode_context(self, batch: VLABatch) -> tuple[torch.Tensor, torch.Tensor | None]:

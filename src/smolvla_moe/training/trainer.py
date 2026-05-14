@@ -8,8 +8,8 @@ from typing import Any
 import torch
 from torch.nn.parallel import DistributedDataParallel
 
-from smolvla_moe.data import VLABatch
-from smolvla_moe.data import build_train_data
+from smolvla_moe.data.batch import VLABatch
+from smolvla_moe.data.build import build_train_data
 from smolvla_moe.models.policy import SmolVLAMoEPolicy
 from smolvla_moe.models.policy import count_parameters
 from smolvla_moe.training.observability import JsonlLogger

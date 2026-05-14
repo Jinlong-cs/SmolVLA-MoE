@@ -4,25 +4,15 @@ from typing import Any
 
 import torch
 import torch.nn.functional as F
+from transformers import AutoProcessor
 
 from smolvla_moe.data.batch import VLABatch
 
 
 class VLACollator:
     def __init__(self, config: dict[str, Any]) -> None:
-        model_config = config["model"]
-        backbone_config = model_config["backbone"]
-        backbone_type = str(backbone_config.get("type", "hf_smolvlm2"))
-        if backbone_type != "hf_smolvlm2":
-            raise ValueError(f"Unsupported backbone type for training collator: {backbone_type}")
-        try:
-            from transformers import AutoProcessor
-        except ImportError as exc:
-            raise ImportError("Install SmolVLA-MoE with the `hf` extra to collate hf_smolvlm2 inputs.") from exc
-        self.processor = AutoProcessor.from_pretrained(
-            str(backbone_config["model_name"]),
-            trust_remote_code=bool(backbone_config.get("trust_remote_code", True)),
-        )
+        backbone_config = config["model"]["backbone"]
+        self.processor = AutoProcessor.from_pretrained(str(backbone_config["model_name"]), trust_remote_code=True)
 
     def __call__(self, samples: list[dict[str, Any]]) -> VLABatch:
         images = torch.stack([sample["images"] for sample in samples], dim=0)
@@ -54,8 +44,6 @@ class VLACollator:
         )
 
     def _hf_inputs(self, images: torch.Tensor, language: list[str]) -> dict[str, torch.Tensor]:
-        if self.processor is None:
-            raise RuntimeError("HF processor is not initialized")
         # SmolVLM processors require one <image> placeholder per camera view.
         image_tokens = "<image>" * int(images.shape[1])
         text = [f"{image_tokens}{instruction}" for instruction in language]

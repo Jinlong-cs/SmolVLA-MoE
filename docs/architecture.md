@@ -50,15 +50,4 @@ Allowed config-level variables:
 - camera keys
 - action horizon
 - action normalization/statistics
-- optional embodiment id in future adapters
-
-## Required Ablations
-
-Before claiming the MoE design is better, compare:
-
-- Dense SmolVLA-style action expert.
-- Same-active SmolVLA-MoE.
-- Same-total dense action expert.
-- MoE with and without shared expert.
-- Top-1 and top-2 routing.
-- Different flow sampling step counts.
+- embodiment id in future adapters

@@ -5,6 +5,8 @@ from typing import Any
 import numpy as np
 import torch
 import torch.nn.functional as F
+from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from torch.utils.data import Dataset
 
 
@@ -16,12 +18,6 @@ class LeRobotVLADataset(Dataset):
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
-        try:
-            from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
-            from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadata
-        except ImportError as exc:
-            raise ImportError("Install the `train` dependencies and LeRobot to use LeRobotVLADataset.") from exc
-
         repo_id = str(config["repo_id"])
         self.image_keys = list(config["image_keys"])
         self.state_key = str(config["state_key"])
@@ -53,7 +49,7 @@ class LeRobotVLADataset(Dataset):
         images = torch.stack([_to_chw_float(row[key], self.image_size) for key in self.image_keys], dim=0)
         state = _as_float_tensor(row[self.state_key]).reshape(-1)[: self.state_dim]
         actions = _as_float_tensor(row[self.action_key]).reshape(self.horizon, self.action_dim)
-        action_mask = ~row.get(f"{self.action_key}_is_pad", torch.zeros(self.horizon, dtype=torch.bool)).bool()
+        action_mask = ~row[f"{self.action_key}_is_pad"].bool()
         if self.normalize_state:
             state = _normalize(state, self.state_mean, self.state_std)
         if self.normalize_actions:
@@ -92,17 +88,13 @@ def _to_chw_float(value: Any, image_size: int) -> torch.Tensor:
     return image
 
 
-def _stats_tensors(stats: dict[str, Any], key: str) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-    if key not in stats:
-        return None, None
+def _stats_tensors(stats: dict[str, Any], key: str) -> tuple[torch.Tensor, torch.Tensor]:
     mean = torch.as_tensor(np.asarray(stats[key]["mean"]), dtype=torch.float32).reshape(-1)
     std = torch.as_tensor(np.asarray(stats[key]["std"]), dtype=torch.float32).reshape(-1).clamp_min(1e-6)
     return mean, std
 
 
-def _normalize(value: torch.Tensor, mean: torch.Tensor | None, std: torch.Tensor | None) -> torch.Tensor:
-    if mean is None or std is None:
-        return value
+def _normalize(value: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
     mean = mean.to(device=value.device, dtype=value.dtype)
     std = std.to(device=value.device, dtype=value.dtype)
     return (value - mean) / std

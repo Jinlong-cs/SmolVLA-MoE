@@ -5,7 +5,7 @@ Research codebase for **SmolVLA-MoE: a compact flow-matching VLA with a sparse M
 [![GitHub](https://img.shields.io/badge/GitHub-SmolVLA--MoE-111111.svg)](https://github.com/Jinlong-cs/SmolVLA-MoE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.3%2B-ee4c2c.svg)](https://pytorch.org/)
-[![Weights & Biases](https://img.shields.io/badge/W%26B-optional-ffbe00.svg)](https://wandb.ai/)
+[![Weights & Biases](https://img.shields.io/badge/W%26B-logging-ffbe00.svg)](https://wandb.ai/)
 
 This repository contains the training scaffold for SmolVLA-MoE on LIBERO first, with benchmark-agnostic model and data interfaces for future ALOHA / RoboTwin / LeRobot-format datasets.
 
@@ -72,17 +72,8 @@ pip install -U pip
 # Install PyTorch for your CUDA version first. Example for CUDA 12.8:
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 
-# Base install
+# Install training dependencies and package
 pip install -e .
-
-# Extra dependencies for Hugging Face backbones, LeRobot data, and W&B training logs
-pip install -e ".[hf,train]"
-```
-
-For development:
-
-```bash
-pip install -e ".[hf,train,dev]"
 ```
 
 ## Model Design
@@ -181,17 +172,6 @@ outputs/libero/smolvla_moe_full_finetune/
 ├── metrics.jsonl
 └── wandb_id.txt
 ```
-
-### 3) Required ablations
-
-Before claiming an MoE advantage, compare:
-
-- dense SmolVLA-style action expert,
-- same-active SmolVLA-MoE,
-- same-total dense action expert,
-- MoE with and without shared expert,
-- top-1 vs top-2 routing,
-- different flow sampling step counts.
 
 ## W&B Logging
 

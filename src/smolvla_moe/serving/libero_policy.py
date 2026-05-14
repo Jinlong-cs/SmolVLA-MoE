@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import torch
 import torch.nn.functional as F
+from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadata
 
 from smolvla_moe.config import load_config
 from smolvla_moe.data.batch import VLABatch
@@ -95,11 +96,6 @@ class LiberoSmolVLAMoEPolicy:
 
 
 def _load_dataset_stats(dataset_config: dict[str, Any]) -> dict[str, Any]:
-    try:
-        from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadata
-    except ImportError as exc:
-        raise ImportError("LeRobot is required for LIBERO eval stats.") from exc
-
     repo_id = str(dataset_config["repo_id"])
     root = dataset_config.get("local_path")
     metadata = LeRobotDatasetMetadata(repo_id, root=root)
@@ -120,15 +116,11 @@ def _hwc_to_chw_float(image: Any, image_size: int) -> torch.Tensor:
     return F.interpolate(chw.unsqueeze(0), size=(image_size, image_size), mode="bilinear", align_corners=False)[0]
 
 
-def _normalize(value: torch.Tensor, mean: torch.Tensor | None, std: torch.Tensor | None) -> torch.Tensor:
-    if mean is None or std is None:
-        return value
+def _normalize(value: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
     return (value - mean.to(dtype=value.dtype)) / std.to(dtype=value.dtype)
 
 
-def _denormalize(value: torch.Tensor, mean: torch.Tensor | None, std: torch.Tensor | None) -> torch.Tensor:
-    if mean is None or std is None:
-        return value
+def _denormalize(value: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
     return value * std.to(dtype=value.dtype) + mean.to(dtype=value.dtype)
 
 

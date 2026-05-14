@@ -25,7 +25,6 @@ class SparseMoE(nn.Module):
         self.hidden_dim = int(config["hidden_dim"])
         self.num_experts = int(config.get("num_routed_experts", 4))
         self.top_k = int(config.get("top_k", 1))
-        self.routing = str(config.get("routing", "chunk"))
         self.load_balance_weight = float(config.get("load_balance_weight", 0.01))
         self.router_z_loss_weight = float(config.get("router_z_loss_weight", 0.0001))
         inner_dim = int(self.hidden_dim * float(config.get("ffn_mult", 4)))
@@ -33,33 +32,25 @@ class SparseMoE(nn.Module):
 
         if self.top_k < 1 or self.top_k > self.num_experts:
             raise ValueError(f"top_k must be in [1, {self.num_experts}], got {self.top_k}")
-        if self.routing not in {"chunk", "token"}:
-            raise ValueError("routing must be either 'chunk' or 'token'")
 
         self.router = nn.Linear(self.hidden_dim, self.num_experts, bias=False)
         self.routed_experts = nn.ModuleList(
             [SwiGLUExpert(self.hidden_dim, inner_dim, dropout=dropout) for _ in range(self.num_experts)]
         )
-        self.shared_expert = (
-            SwiGLUExpert(self.hidden_dim, inner_dim, dropout=dropout) if bool(config.get("shared_expert", True)) else None
-        )
+        self.shared_expert = SwiGLUExpert(self.hidden_dim, inner_dim, dropout=dropout)
 
-    def forward(self, x: torch.Tensor, router_context: torch.Tensor | None = None) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    def forward(self, x: torch.Tensor, router_context: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if x.ndim != 3:
             raise ValueError(f"SparseMoE expects [B, T, H], got {tuple(x.shape)}")
 
-        shared = 0.0 if self.shared_expert is None else self.shared_expert(x)
-        if self.routing == "chunk":
-            routed, aux = self._forward_chunk(x, router_context)
-        else:
-            routed, aux = self._forward_token(x)
+        shared = self.shared_expert(x)
+        routed, aux = self._forward_chunk(x, router_context)
         return shared + routed, aux
 
     def _forward_chunk(
-        self, x: torch.Tensor, router_context: torch.Tensor | None
+        self, x: torch.Tensor, router_context: torch.Tensor
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        context = x.mean(dim=1) if router_context is None else router_context
-        logits = self.router(context)
+        logits = self.router(router_context)
         probs = logits.softmax(dim=-1)
         top_values, top_indices = torch.topk(probs, k=self.top_k, dim=-1)
         top_values = top_values / top_values.sum(dim=-1, keepdim=True).clamp_min(1e-6)
@@ -72,23 +63,6 @@ class SparseMoE(nn.Module):
                     out[mask] += expert(x[mask]) * top_values[mask, slot].view(-1, 1, 1)
 
         return out, self._aux_losses(logits, probs, top_indices)
-
-    def _forward_token(self, x: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        batch_size, seq_len, hidden_dim = x.shape
-        flat = x.reshape(batch_size * seq_len, hidden_dim)
-        logits = self.router(flat)
-        probs = logits.softmax(dim=-1)
-        top_values, top_indices = torch.topk(probs, k=self.top_k, dim=-1)
-        top_values = top_values / top_values.sum(dim=-1, keepdim=True).clamp_min(1e-6)
-
-        flat_out = torch.zeros_like(flat)
-        for slot in range(self.top_k):
-            for expert_idx, expert in enumerate(self.routed_experts):
-                mask = top_indices[:, slot] == expert_idx
-                if mask.any():
-                    flat_out[mask] += expert(flat[mask]) * top_values[mask, slot].unsqueeze(-1)
-
-        return flat_out.reshape(batch_size, seq_len, hidden_dim), self._aux_losses(logits, probs, top_indices)
 
     def _aux_losses(
         self, logits: torch.Tensor, probs: torch.Tensor, top_indices: torch.Tensor
