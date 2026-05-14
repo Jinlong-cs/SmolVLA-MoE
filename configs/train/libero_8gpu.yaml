@@ -1,0 +1,38 @@
+defaults:
+  - ../model/smolvla_moe_0p5b_active.yaml
+  - ../dataset/libero.yaml
+
+seed: 7
+output_dir: outputs/libero/smolvla_moe_0p5b_active
+device: cuda
+
+train:
+  batch_size: 32
+  max_steps: 30000
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  grad_clip_norm: 1.0
+  log_every: 20
+  save_every: 5000
+  ddp_find_unused_parameters: true
+  amp_dtype: bfloat16
+  wandb:
+    enabled: true
+    workspace: null
+    project: smolvla-moe-libero
+    name: smolvla_moe_0p5b_active_libero
+    group: libero_8gpu
+    mode: online
+    dir: null
+    tags:
+      - smolvla-moe
+      - libero
+      - flow-matching
+      - moe-action-decoder
+    notes: "SmolVLA-MoE first LIBERO 8GPU training run."
+    resume: allow
+    id_file: wandb_id.txt
+    log_code: false
+    log_first_batch: true
+    log_first_batch_max_images: 4
+    log_checkpoints: false
