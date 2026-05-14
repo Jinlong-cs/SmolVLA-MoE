@@ -240,10 +240,23 @@ The LIBERO closed-loop evaluation CLI shape is reserved:
 python scripts/eval_libero.py \
   --checkpoint outputs/libero/smolvla_moe_full_finetune/checkpoints/final.pt \
   --suite all \
-  --num-trials 50
+  --num-trials 50 \
+  --output-dir outputs/libero/eval/final
 ```
 
-Closed-loop LIBERO simulation is not wired in this initial scaffold yet. The intended evaluation protocol is:
+By default, evaluation saves rollout videos through the OpenPI LIBERO runner:
+
+```text
+outputs/libero/eval/final/
+├── summary.json
+├── video_manifest.json
+├── videos.html
+└── videos/
+```
+
+Open `videos.html` to browse success and failure rollouts. Use `--video-dir <path>` to write MP4s elsewhere or `--no-save-videos` to disable video output.
+
+The intended evaluation protocol is:
 
 ```text
 LIBERO-Spatial, LIBERO-Object, LIBERO-Goal, LIBERO-10

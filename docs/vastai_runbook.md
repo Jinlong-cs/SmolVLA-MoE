@@ -44,6 +44,26 @@ outputs/libero/smolvla_moe_full_finetune/wandb_id.txt
 
 If the same output directory is reused, `resume: allow` will reconnect to the existing W&B run. Use a new `output_dir` or delete that id file when starting a truly new run.
 
+## LIBERO Eval With Videos
+
+```bash
+OPENPI_ROOT=/workspace/openpi \
+HF_HOME=/workspace/.hf_home \
+MUJOCO_GL=egl \
+PYOPENGL_PLATFORM=egl \
+PYTHONPATH=/workspace/SmolVLA-MoE/src:/workspace/openpi/src:/workspace/openpi/packages/openpi-client/src:/workspace/openpi/third_party/libero \
+/workspace/openpi/.venv/bin/python scripts/eval_libero.py \
+  --checkpoint outputs/libero/smolvla_moe_full_finetune/checkpoints/final.pt \
+  --config configs/train/libero_8gpu.yaml \
+  --suite all \
+  --num-trials 50 \
+  --output-dir outputs/libero/eval/final \
+  --server-python /workspace/openpi/.venv/bin/python \
+  --libero-python /workspace/openpi/examples/libero/.venv/bin/python
+```
+
+The eval wrapper writes `summary.json`, `video_manifest.json`, `videos.html`, and per-suite MP4 files under `outputs/libero/eval/final/`. Use `--no-save-videos` for metric-only runs.
+
 ## Required Records
 
 Record these in `workspaces/smolvla-moe-libero/`:

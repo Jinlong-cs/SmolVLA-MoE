@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 from pathlib import Path
@@ -32,6 +33,9 @@ def main() -> int:
     parser.add_argument("--replan-steps", type=int, default=5)
     parser.add_argument("--resize-size", type=int, default=256)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--video-dir", default=None, help="Directory for rollout MP4 files. Defaults to OUTPUT/videos.")
+    parser.add_argument("--video-index", default="videos.html", help="HTML video browser written inside OUTPUT.")
+    parser.add_argument("--no-video-index", action="store_true", help="Do not write video_manifest.json or HTML index.")
     parser.add_argument("--no-save-videos", action="store_true")
     parser.add_argument("--no-binarize-gripper", action="store_true")
     parser.add_argument("--no-clip-actions", action="store_true")
@@ -42,6 +46,7 @@ def main() -> int:
     output_dir = Path(args.output_dir or _default_output_dir(args.checkpoint)).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     server_log = Path(args.server_log or output_dir / "policy_server.log")
+    video_root = Path(args.video_dir).resolve() if args.video_dir is not None else output_dir / "videos"
 
     server = _start_server(args, root, server_log)
     try:
@@ -50,7 +55,7 @@ def main() -> int:
         suites = SUITES if args.suite == "all" else (args.suite,)
         for suite in suites:
             result_path = output_dir / f"{suite}_results.json"
-            video_path = output_dir / "videos" / suite
+            video_path = video_root / suite
             cmd = [
                 _libero_python(args),
                 str(Path(args.openpi_root) / "examples/libero/main_task_slice.py"),
@@ -72,6 +77,22 @@ def main() -> int:
             subprocess.run(cmd, check=True, env=_eval_env(args.openpi_root, root))
             results.append(json.loads(result_path.read_text(encoding="utf-8")))
         summary = _summarize(results)
+        if args.no_save_videos:
+            summary["videos"] = {"enabled": False}
+        else:
+            manifest = _collect_video_manifest(video_root, output_dir)
+            manifest_path = output_dir / "video_manifest.json"
+            manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+            summary["videos"] = {
+                "enabled": True,
+                "video_dir": str(video_root),
+                "count": len(manifest["videos"]),
+                "manifest_path": str(manifest_path),
+            }
+            if not args.no_video_index:
+                index_path = output_dir / args.video_index
+                _write_video_index(index_path, manifest, summary)
+                summary["videos"]["index_path"] = str(index_path)
         (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print(json.dumps(summary, indent=2))
     finally:
@@ -167,6 +188,94 @@ def _summarize(results: list[dict]) -> dict:
         "total_episodes": total_episodes,
         "total_successes": total_successes,
     }
+
+
+def _collect_video_manifest(video_root: Path, output_dir: Path) -> dict:
+    videos = []
+    for path in sorted(video_root.rglob("*.mp4")):
+        rel_output = Path(os.path.relpath(path, output_dir)).as_posix()
+        rel_video_root = Path(os.path.relpath(path, video_root)).as_posix()
+        status = None
+        if path.stem.endswith("_success"):
+            status = "success"
+        elif path.stem.endswith("_failure"):
+            status = "failure"
+        videos.append(
+            {
+                "path": str(path),
+                "relative_path": rel_output,
+                "suite": path.parent.name,
+                "name": path.name,
+                "status": status,
+                "size_bytes": path.stat().st_size,
+                "relative_to_video_dir": rel_video_root,
+            }
+        )
+    return {
+        "video_dir": str(video_root),
+        "output_dir": str(output_dir),
+        "videos": videos,
+    }
+
+
+def _write_video_index(index_path: Path, manifest: dict, summary: dict) -> None:
+    grouped: dict[str, list[dict]] = {}
+    for video in manifest["videos"]:
+        grouped.setdefault(str(video["suite"]), []).append(video)
+
+    lines = [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        '  <meta charset="utf-8">',
+        "  <title>SmolVLA-MoE LIBERO Eval Videos</title>",
+        "  <style>",
+        "    body { font-family: Arial, sans-serif; margin: 24px; color: #111827; }",
+        "    h1 { font-size: 24px; margin-bottom: 4px; }",
+        "    h2 { margin-top: 28px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }",
+        "    .meta { color: #4b5563; margin-bottom: 18px; }",
+        "    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }",
+        "    .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; background: #fff; }",
+        "    video { width: 100%; background: #000; border-radius: 4px; }",
+        "    .caption { font-size: 12px; overflow-wrap: anywhere; margin-top: 8px; color: #374151; }",
+        "    .success { color: #047857; font-weight: 700; }",
+        "    .failure { color: #b91c1c; font-weight: 700; }",
+        "  </style>",
+        "</head>",
+        "<body>",
+        "  <h1>SmolVLA-MoE LIBERO Eval Videos</h1>",
+        (
+            '  <div class="meta">'
+            f'Overall success: {summary["total_successes"]}/{summary["total_episodes"]} '
+            f'({summary["overall_success_rate"]:.2%}) | Videos: {len(manifest["videos"])}'
+            "</div>"
+        ),
+    ]
+    if not grouped:
+        lines.append("  <p>No videos were found.</p>")
+    for suite, videos in sorted(grouped.items()):
+        lines.append(f"  <h2>{html.escape(suite)}</h2>")
+        lines.append('  <div class="grid">')
+        for video in videos:
+            src = html.escape(str(video["relative_path"]))
+            name = html.escape(str(video["name"]))
+            status = str(video.get("status") or "unknown")
+            status_class = html.escape(status)
+            lines.extend(
+                [
+                    '    <div class="card">',
+                    f'      <video controls preload="metadata" src="{src}"></video>',
+                    (
+                        '      <div class="caption">'
+                        f'<span class="{status_class}">{html.escape(status)}</span> | {name}'
+                        "</div>"
+                    ),
+                    "    </div>",
+                ]
+            )
+        lines.append("  </div>")
+    lines.extend(["</body>", "</html>"])
+    index_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 if __name__ == "__main__":
