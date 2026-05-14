@@ -83,6 +83,7 @@ def train(config: dict[str, Any], max_steps_override: int | None = None) -> None
         try:
             batch = next(iterator)
         except StopIteration:
+            _set_sampler_epoch(data, step)
             iterator = iter(data)
             batch = next(iterator)
         if not isinstance(batch, VLABatch):
@@ -145,6 +146,12 @@ def train(config: dict[str, Any], max_steps_override: int | None = None) -> None
 
 def _unwrap(model: torch.nn.Module) -> SmolVLAMoEPolicy:
     return model.module if isinstance(model, DistributedDataParallel) else model
+
+
+def _set_sampler_epoch(data: Any, step: int) -> None:
+    sampler = getattr(data, "sampler_for_epoch", None)
+    if sampler is not None and hasattr(sampler, "set_epoch"):
+        sampler.set_epoch(step)
 
 
 def _maybe_init_distributed() -> dict[str, int]:

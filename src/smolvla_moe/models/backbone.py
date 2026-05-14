@@ -88,6 +88,7 @@ class HFSmolVLM2Backbone(nn.Module):
 
         model_name = str(config["model_name"])
         trust_remote_code = bool(config.get("trust_remote_code", True))
+        self.freeze = bool(config.get("freeze", True))
         kwargs: dict[str, Any] = {"trust_remote_code": trust_remote_code}
         torch_dtype = _torch_dtype(config.get("torch_dtype", "auto"))
         if torch_dtype is not None:
@@ -98,7 +99,7 @@ class HFSmolVLM2Backbone(nn.Module):
         self.model = AutoModelForImageTextToText.from_pretrained(model_name, **kwargs)
         self.hidden_dim = _infer_hidden_dim(self.model.config)
 
-        if bool(config.get("freeze", True)):
+        if self.freeze:
             self.model.requires_grad_(False)
             self.model.eval()
 
@@ -115,8 +116,14 @@ class HFSmolVLM2Backbone(nn.Module):
             raise ValueError(
                 "hf_smolvlm2 backbone requires batch.extras['hf_inputs'] from the matching Hugging Face processor."
             )
-        outputs = self.model(**hf_inputs, output_hidden_states=True, return_dict=True)
-        hidden = outputs.hidden_states[-1]
+        model = getattr(self.model, "model", self.model)
+        forward_kwargs = dict(hf_inputs)
+        forward_kwargs.update({"output_hidden_states": False, "return_dict": True, "use_cache": False})
+        with torch.set_grad_enabled(not self.freeze):
+            outputs = model(**forward_kwargs)
+        hidden = getattr(outputs, "last_hidden_state", None)
+        if hidden is None:
+            hidden = outputs[0]
         mask = hf_inputs.get("attention_mask")
         return hidden, mask
 
