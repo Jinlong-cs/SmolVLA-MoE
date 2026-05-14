@@ -107,7 +107,7 @@ def _load_dataset_stats(dataset_config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _hwc_to_chw_float(image: Any, image_size: int) -> torch.Tensor:
-    array = np.asarray(image)
+    array = np.array(image, copy=True)
     if array.ndim != 3:
         raise ValueError(f"Expected image rank 3, got {array.shape}")
     tensor = torch.as_tensor(array)

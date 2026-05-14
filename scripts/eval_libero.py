@@ -54,21 +54,21 @@ def main() -> int:
             cmd = [
                 _libero_python(args),
                 str(Path(args.openpi_root) / "examples/libero/main_task_slice.py"),
-                f"--host={args.host}",
-                f"--port={args.port}",
-                f"--resize-size={args.resize_size}",
-                f"--replan-steps={args.replan_steps}",
-                f"--task-suite-name={suite}",
-                f"--task-start={args.task_start}",
-                f"--num-trials-per-task={args.num_trials}",
-                f"--video-out-path={video_path}",
-                f"--result-path={result_path}",
-                f"--seed={args.seed}",
+                f"--args.host={args.host}",
+                f"--args.port={args.port}",
+                f"--args.resize-size={args.resize_size}",
+                f"--args.replan-steps={args.replan_steps}",
+                f"--args.task-suite-name={suite}",
+                f"--args.task-start={args.task_start}",
+                f"--args.num-trials-per-task={args.num_trials}",
+                f"--args.video-out-path={video_path}",
+                f"--args.result-path={result_path}",
+                f"--args.seed={args.seed}",
             ]
             if args.task_end is not None:
-                cmd.append(f"--task-end={args.task_end}")
+                cmd.append(f"--args.task-end={args.task_end}")
             if args.no_save_videos:
-                cmd.append("--no-save-videos")
+                cmd.append("--args.no-save-videos")
             subprocess.run(cmd, check=True, env=_eval_env(args.openpi_root, root))
             results.append(json.loads(result_path.read_text(encoding="utf-8")))
         summary = _summarize(results)
