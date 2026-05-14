@@ -40,6 +40,7 @@ def main() -> int:
     parser.add_argument("--no-binarize-gripper", action="store_true")
     parser.add_argument("--no-clip-actions", action="store_true")
     parser.add_argument("--use-flash", action="store_true")
+    parser.add_argument("--latency-log", default=None)
     parser.add_argument("--server-log", default=None)
     args = parser.parse_args()
 
@@ -47,9 +48,10 @@ def main() -> int:
     output_dir = Path(args.output_dir or _default_output_dir(args.checkpoint)).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     server_log = Path(args.server_log or output_dir / "policy_server.log")
+    latency_log = Path(args.latency_log or output_dir / _latency_log_name(args.use_flash))
     video_root = Path(args.video_dir).resolve() if args.video_dir is not None else output_dir / "videos"
 
-    server = _start_server(args, root, server_log)
+    server = _start_server(args, root, server_log, latency_log)
     try:
         _wait_for_health(args.host, args.port)
         results = []
@@ -78,7 +80,11 @@ def main() -> int:
             subprocess.run(cmd, check=True, env=_eval_env(args.openpi_root, root))
             results.append(json.loads(result_path.read_text(encoding="utf-8")))
         summary = _summarize(results)
-        summary["policy_runtime"] = {"use_flash": bool(args.use_flash)}
+        summary["policy_runtime"] = {
+            "use_flash": bool(args.use_flash),
+            "latency_log": str(latency_log),
+            "latency_ms": _summarize_latency(latency_log),
+        }
         if args.no_save_videos:
             summary["videos"] = {"enabled": False}
         else:
@@ -106,7 +112,7 @@ def main() -> int:
     return 0
 
 
-def _start_server(args: argparse.Namespace, root: Path, server_log: Path) -> subprocess.Popen:
+def _start_server(args: argparse.Namespace, root: Path, server_log: Path, latency_log: Path) -> subprocess.Popen:
     server_log.parent.mkdir(parents=True, exist_ok=True)
     log_file = server_log.open("w", encoding="utf-8")
     cmd = [
@@ -119,6 +125,7 @@ def _start_server(args: argparse.Namespace, root: Path, server_log: Path) -> sub
         f"--device={args.device}",
         f"--amp-dtype={args.amp_dtype}",
         f"--seed={args.seed}",
+        f"--latency-log={latency_log}",
     ]
     if args.no_binarize_gripper:
         cmd.append("--no-binarize-gripper")
@@ -127,6 +134,10 @@ def _start_server(args: argparse.Namespace, root: Path, server_log: Path) -> sub
     if args.use_flash:
         cmd.append("--use-flash")
     return subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, env=_eval_env(args.openpi_root, root))
+
+
+def _latency_log_name(use_flash: bool) -> str:
+    return f"policy_latency_{'flash' if use_flash else 'full'}.jsonl"
 
 
 def _wait_for_health(host: str, port: int, timeout_s: float = 240.0) -> None:
@@ -188,6 +199,39 @@ def _summarize(results: list[dict]) -> dict:
         "total_episodes": total_episodes,
         "total_successes": total_successes,
     }
+
+
+def _summarize_latency(path: Path) -> dict:
+    records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not records:
+        raise RuntimeError(f"No policy latency records were written to {path}")
+    return {
+        "num_calls": len(records),
+        "preprocess": _latency_stats([float(record["preprocess_ms"]) for record in records]),
+        "policy": _latency_stats([float(record["policy_ms"]) for record in records]),
+        "postprocess": _latency_stats([float(record["postprocess_ms"]) for record in records]),
+        "total": _latency_stats([float(record["total_ms"]) for record in records]),
+    }
+
+
+def _latency_stats(values: list[float]) -> dict[str, float]:
+    ordered = sorted(values)
+    return {
+        "mean": sum(ordered) / len(ordered),
+        "p50": _percentile(ordered, 0.50),
+        "p90": _percentile(ordered, 0.90),
+        "p95": _percentile(ordered, 0.95),
+        "min": ordered[0],
+        "max": ordered[-1],
+    }
+
+
+def _percentile(ordered_values: list[float], q: float) -> float:
+    index = (len(ordered_values) - 1) * float(q)
+    lower = int(index)
+    upper = min(lower + 1, len(ordered_values) - 1)
+    weight = index - lower
+    return ordered_values[lower] * (1.0 - weight) + ordered_values[upper] * weight
 
 
 def _collect_video_manifest(video_root: Path, output_dir: Path) -> dict:

@@ -175,7 +175,7 @@ torchrun --standalone --nproc_per_node=8 scripts/train.py \
 The default run writes outputs to:
 
 ```text
-outputs/libero/smolvla_moe_full_finetune/
+outputs/libero/smolvla_moe_flash_full_finetune/
 ├── checkpoints/
 ├── metrics.jsonl
 └── wandb_id.txt
@@ -227,7 +227,7 @@ The LIBERO closed-loop evaluation CLI shape is reserved:
 
 ```bash
 python scripts/eval_libero.py \
-  --checkpoint outputs/libero/smolvla_moe_full_finetune/checkpoints/final.pt \
+  --checkpoint outputs/libero/smolvla_moe_flash_full_finetune/checkpoints/final.pt \
   --suite all \
   --num-trials 50 \
   --output-dir outputs/libero/eval/final
@@ -237,12 +237,14 @@ To evaluate the FLASH runtime path for a checkpoint trained with `model.flash.en
 
 ```bash
 python scripts/eval_libero.py \
-  --checkpoint outputs/libero/smolvla_moe_full_finetune/checkpoints/final.pt \
+  --checkpoint outputs/libero/smolvla_moe_flash_full_finetune/checkpoints/final.pt \
   --suite all \
   --num-trials 50 \
   --output-dir outputs/libero/eval/final_flash \
   --use-flash
 ```
+
+Each eval run writes `policy_latency_full.jsonl` or `policy_latency_flash.jsonl` plus latency summaries in `summary.json`.
 
 By default, evaluation saves rollout videos through the OpenPI LIBERO runner:
 

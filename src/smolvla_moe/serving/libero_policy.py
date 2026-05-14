@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import time
 from typing import Any
 
 import numpy as np
@@ -28,6 +30,7 @@ class LiberoSmolVLAMoEPolicy:
         binarize_gripper: bool = True,
         clip_actions: bool = True,
         use_flash: bool = False,
+        latency_log: str | Path | None = None,
     ) -> None:
         payload = torch.load(checkpoint, map_location="cpu")
         self.config = load_config(config_path) if config_path is not None else payload["config"]
@@ -40,6 +43,11 @@ class LiberoSmolVLAMoEPolicy:
         self.binarize_gripper = bool(binarize_gripper)
         self.clip_actions = bool(clip_actions)
         self.use_flash = bool(use_flash)
+        self.latency_log = Path(latency_log) if latency_log is not None else None
+        self.infer_count = 0
+        if self.latency_log is not None:
+            self.latency_log.parent.mkdir(parents=True, exist_ok=True)
+            self.latency_log.write_text("", encoding="utf-8")
 
         self.policy = SmolVLAMoEPolicy(self.config).to(self.device)
         missing, unexpected = self.policy.load_state_dict(payload["model"], strict=False)
@@ -71,18 +79,29 @@ class LiberoSmolVLAMoEPolicy:
 
     @torch.no_grad()
     def infer(self, obs: dict[str, Any]) -> dict[str, Any]:
+        total_start = time.perf_counter()
         batch = self._obs_to_batch(obs).to(self.device)
+        self._sync_device()
+        preprocess_ms = (time.perf_counter() - total_start) * 1000.0
+        policy_start = time.perf_counter()
         with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.amp_dtype is not None):
             actions = (
                 self.policy.predict_action_flash(batch, generator=self.generator)
                 if self.use_flash
                 else self.policy.predict_action(batch, generator=self.generator)
             )
+        self._sync_device()
+        policy_ms = (time.perf_counter() - policy_start) * 1000.0
+        postprocess_start = time.perf_counter()
         actions = actions[0].float().cpu()
         if self.normalize_actions:
             actions = _denormalize(actions, self.action_mean, self.action_std)
         actions_np = actions.numpy().astype(np.float32)
-        return {"actions": _postprocess_libero_actions(actions_np, self.binarize_gripper, self.clip_actions)}
+        output = {"actions": _postprocess_libero_actions(actions_np, self.binarize_gripper, self.clip_actions)}
+        postprocess_ms = (time.perf_counter() - postprocess_start) * 1000.0
+        total_ms = (time.perf_counter() - total_start) * 1000.0
+        self._log_latency(preprocess_ms, policy_ms, postprocess_ms, total_ms)
+        return output
 
     def reset(self) -> None:
         return None
@@ -101,6 +120,25 @@ class LiberoSmolVLAMoEPolicy:
             "language": str(obs.get("prompt", "")),
         }
         return self.collator([sample])
+
+    def _sync_device(self) -> None:
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+
+    def _log_latency(self, preprocess_ms: float, policy_ms: float, postprocess_ms: float, total_ms: float) -> None:
+        if self.latency_log is None:
+            return
+        self.infer_count += 1
+        record = {
+            "call": self.infer_count,
+            "mode": "flash" if self.use_flash else "full",
+            "preprocess_ms": float(preprocess_ms),
+            "policy_ms": float(policy_ms),
+            "postprocess_ms": float(postprocess_ms),
+            "total_ms": float(total_ms),
+        }
+        with self.latency_log.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
 
 
 def _load_dataset_stats(dataset_config: dict[str, Any]) -> dict[str, Any]:
