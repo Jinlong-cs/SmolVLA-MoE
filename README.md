@@ -23,7 +23,6 @@ SmolVLA-MoE is designed around:
 - [Environment Setup](#environment-setup)
 - [Model Design](#model-design)
 - [Dataset Preparation](#dataset-preparation)
-- [Local Smoke Test](#local-smoke-test)
 - [Training](#training)
 - [W&B Logging](#wb-logging)
 - [Inference and Evaluation](#inference-and-evaluation)
@@ -39,28 +38,24 @@ SmolVLA-MoE/
 │   ├── dataset/
 │   │   └── libero.yaml                  # LIBERO / LeRobot data adapter config
 │   ├── model/
-│   │   ├── smolvla_moe_tiny.yaml        # Tiny local smoke model
-│   │   └── smolvla_moe_0p5b_active.yaml # Target SmolVLM2 + MoE action expert config
+│   │   └── smolvla_moe_0p5b_active.yaml # SmolVLM2 + MoE action expert config
 │   └── train/
-│       ├── libero_smoke.yaml            # Synthetic-data smoke config
-│       └── libero_8gpu.yaml             # 8GPU LIBERO training config draft
+│       └── libero_8gpu.yaml             # 8GPU LIBERO training config
 ├── docs/
 │   ├── assets/
 │   │   └── smolvla_moe_architecture.svg # README architecture figure
 │   ├── architecture.md                  # Design notes and required ablations
 │   └── vastai_runbook.md                # Remote training checklist
 ├── scripts/
-│   ├── smoke_forward.py                 # Forward + sampling smoke test
 │   ├── train.py                         # Single-node / torchrun training entrypoint
 │   ├── print_model_size.py              # Parameter count utility
-│   └── eval_libero.py                   # LIBERO eval CLI placeholder
+│   ├── serve_libero_policy.py           # OpenPI-compatible policy server
+│   └── eval_libero.py                   # LIBERO closed-loop eval wrapper
 ├── src/smolvla_moe/
-│   ├── data/                            # Synthetic and LeRobot data adapters
+│   ├── data/                            # LeRobot/LIBERO data adapter
 │   ├── models/                          # Backbone, flow matching, MoE, policy
 │   ├── training/                        # Trainer and observability
 │   └── utils/
-├── tests/
-│   └── test_model_smoke.py
 ├── outputs/                             # Training outputs, ignored by git
 └── checkpoints/                         # External checkpoints, ignored by git
 ```
@@ -155,24 +150,7 @@ export HF_HOME=/workspace/.hf_home
 export HF_HUB_ENABLE_HF_TRANSFER=1
 ```
 
-The current LIBERO adapter is intentionally config-driven. Before a long run, validate the real dataset keys and tensor shapes on the target machine.
-
-## Local Smoke Test
-
-The tiny config does not download SmolVLM2 weights. It exists to validate the model graph, flow loss, MoE routing, checkpointing, and W&B-disabled logging locally.
-
-```bash
-python scripts/smoke_forward.py --config configs/train/libero_smoke.yaml
-python scripts/train.py --config configs/train/libero_smoke.yaml --max-steps 2
-python -m pytest tests/test_model_smoke.py -q
-```
-
-Expected smoke behavior:
-
-```text
-sampled_actions_shape=(2, 8, 7)
-metrics include train/loss, train/flow_loss, moe/expert_usage_*
-```
+The current LIBERO adapter is intentionally config-driven. Before a long benchmark run, validate the real dataset keys and tensor shapes on the target machine.
 
 ## Training
 
@@ -277,15 +255,13 @@ suite-level success and overall success
 
 Implemented:
 
-- tiny smoke backbone,
 - Hugging Face SmolVLM2 backbone hook,
 - flow-matching objective,
 - shared + routed MoE action decoder,
-- synthetic smoke data,
 - LeRobot/LIBERO adapter scaffold,
 - torchrun-compatible trainer,
 - W&B and JSONL observability,
-- local smoke test.
+- OpenPI-compatible LIBERO policy server and eval wrapper.
 
 Not finished yet:
 

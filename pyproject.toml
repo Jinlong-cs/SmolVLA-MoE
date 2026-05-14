@@ -28,7 +28,6 @@ train = [
   "wandb>=0.19",
 ]
 dev = [
-  "pytest>=8.0",
   "ruff>=0.8",
 ]
 

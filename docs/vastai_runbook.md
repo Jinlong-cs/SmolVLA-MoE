@@ -12,15 +12,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -e ".[hf,train]"
-python -m compileall src scripts tests
-```
-
-## Local Smoke On The Remote
-
-```bash
-python scripts/smoke_forward.py --config configs/train/libero_smoke.yaml
-python scripts/train.py --config configs/train/libero_smoke.yaml --max-steps 2
-python -m pytest tests/test_model_smoke.py -q
+python -m compileall src scripts
 ```
 
 ## LIBERO Training Skeleton

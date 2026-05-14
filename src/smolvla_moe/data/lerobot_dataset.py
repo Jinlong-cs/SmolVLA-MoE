@@ -11,8 +11,8 @@ from torch.utils.data import Dataset
 class LeRobotVLADataset(Dataset):
     """Thin VLA adapter around Hugging Face LeRobotDataset.
 
-    The adapter keeps benchmark-specific key mapping in config. It returns plain dict samples so the collator can
-    choose either the smoke hash tokenizer or the production Hugging Face processor.
+    The adapter keeps benchmark-specific key mapping in config and returns plain dict samples for the Hugging Face
+    SmolVLM2 processor.
     """
 
     def __init__(self, config: dict[str, Any]) -> None:

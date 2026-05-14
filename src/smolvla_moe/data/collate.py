@@ -6,28 +6,23 @@ import torch
 import torch.nn.functional as F
 
 from smolvla_moe.data.batch import VLABatch
-from smolvla_moe.data.text import HashTokenizer
 
 
 class VLACollator:
     def __init__(self, config: dict[str, Any]) -> None:
         model_config = config["model"]
         backbone_config = model_config["backbone"]
-        self.backbone_type = str(backbone_config.get("type", "tiny"))
-        self.hash_tokenizer = HashTokenizer(
-            vocab_size=int(backbone_config.get("text_vocab_size", 32768)),
-            max_length=int(backbone_config.get("max_text_len", 64)),
+        backbone_type = str(backbone_config.get("type", "hf_smolvlm2"))
+        if backbone_type != "hf_smolvlm2":
+            raise ValueError(f"Unsupported backbone type for training collator: {backbone_type}")
+        try:
+            from transformers import AutoProcessor
+        except ImportError as exc:
+            raise ImportError("Install SmolVLA-MoE with the `hf` extra to collate hf_smolvlm2 inputs.") from exc
+        self.processor = AutoProcessor.from_pretrained(
+            str(backbone_config["model_name"]),
+            trust_remote_code=bool(backbone_config.get("trust_remote_code", True)),
         )
-        self.processor = None
-        if self.backbone_type == "hf_smolvlm2":
-            try:
-                from transformers import AutoProcessor
-            except ImportError as exc:
-                raise ImportError("Install SmolVLA-MoE with the `hf` extra to collate hf_smolvlm2 inputs.") from exc
-            self.processor = AutoProcessor.from_pretrained(
-                str(backbone_config["model_name"]),
-                trust_remote_code=bool(backbone_config.get("trust_remote_code", True)),
-            )
 
     def __call__(self, samples: list[dict[str, Any]]) -> VLABatch:
         images = torch.stack([sample["images"] for sample in samples], dim=0)
@@ -42,14 +37,10 @@ class VLACollator:
         )
         language = [str(sample.get("language", "")) for sample in samples]
 
-        if self.backbone_type == "hf_smolvlm2":
-            hf_inputs = self._hf_inputs(images, language)
-            input_ids = hf_inputs.get("input_ids")
-            attention_mask = hf_inputs.get("attention_mask")
-            extras = {"hf_inputs": hf_inputs}
-        else:
-            input_ids, attention_mask = self.hash_tokenizer(language)
-            extras = None
+        hf_inputs = self._hf_inputs(images, language)
+        input_ids = hf_inputs.get("input_ids")
+        attention_mask = hf_inputs.get("attention_mask")
+        extras = {"hf_inputs": hf_inputs}
 
         return VLABatch(
             images=images,

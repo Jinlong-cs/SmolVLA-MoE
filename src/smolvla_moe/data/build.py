@@ -7,14 +7,11 @@ from torch.utils.data import DistributedSampler
 
 from smolvla_moe.data.collate import VLACollator
 from smolvla_moe.data.lerobot_dataset import LeRobotVLADataset
-from smolvla_moe.data.synthetic import SyntheticVLADataset
 
 
 def build_train_data(config: dict[str, Any], rank: int = 0, world_size: int = 1) -> Any:
     dataset_config = config["dataset"]
-    dataset_type = str(dataset_config.get("type", "synthetic"))
-    if dataset_type == "synthetic":
-        return SyntheticVLADataset(dataset_config)
+    dataset_type = str(dataset_config.get("type", "lerobot"))
     if dataset_type == "lerobot":
         dataset = LeRobotVLADataset(dataset_config)
         sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True) if world_size > 1 else None
