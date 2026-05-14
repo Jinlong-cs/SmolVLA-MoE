@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+from smolvla_moe.config import load_config
+from smolvla_moe.data.batch import VLABatch
+from smolvla_moe.data.collate import VLACollator
+from smolvla_moe.data.lerobot_dataset import _stats_tensors
+from smolvla_moe.models.policy import SmolVLAMoEPolicy
+
+
+class LiberoSmolVLAMoEPolicy:
+    """OpenPI-compatible LIBERO policy wrapper for SmolVLA-MoE checkpoints."""
+
+    def __init__(
+        self,
+        checkpoint: str | Path,
+        config_path: str | Path | None = None,
+        device: str = "cuda",
+        amp_dtype: str | None = "bfloat16",
+        seed: int | None = None,
+        binarize_gripper: bool = True,
+        clip_actions: bool = True,
+    ) -> None:
+        payload = torch.load(checkpoint, map_location="cpu")
+        self.config = load_config(config_path) if config_path is not None else payload["config"]
+        self.dataset_config = self.config["dataset"]
+        self.device = torch.device(device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.amp_dtype = _amp_dtype(amp_dtype)
+        self.generator = torch.Generator(device=self.device)
+        if seed is not None:
+            self.generator.manual_seed(int(seed))
+        self.binarize_gripper = bool(binarize_gripper)
+        self.clip_actions = bool(clip_actions)
+
+        self.policy = SmolVLAMoEPolicy(self.config).to(self.device)
+        missing, unexpected = self.policy.load_state_dict(payload["model"], strict=False)
+        if missing or unexpected:
+            raise RuntimeError(f"Checkpoint state mismatch. missing={missing} unexpected={unexpected}")
+        self.policy.eval()
+        self.collator = VLACollator(self.config)
+
+        stats = _load_dataset_stats(self.dataset_config)
+        self.state_mean, self.state_std = _stats_tensors(stats, str(self.dataset_config["state_key"]))
+        self.action_mean, self.action_std = _stats_tensors(stats, str(self.dataset_config["action_key"]))
+        self.normalize_state = bool(self.dataset_config.get("normalize_state", True))
+        self.normalize_actions = bool(self.dataset_config.get("normalize_actions", True))
+        self.image_size = int(self.dataset_config.get("image_size", 256))
+        self.action_dim = int(self.dataset_config.get("action_dim", 7))
+        self.state_dim = int(self.dataset_config.get("state_dim", 8))
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        model_config = self.config["model"]
+        return {
+            "policy": "smolvla-moe",
+            "horizon": int(model_config["action_decoder"]["horizon"]),
+            "action_dim": int(model_config["action_decoder"]["action_dim"]),
+            "flow_inference_steps": int(model_config.get("flow", {}).get("inference_steps", 4)),
+        }
+
+    @torch.no_grad()
+    def infer(self, obs: dict[str, Any]) -> dict[str, Any]:
+        batch = self._obs_to_batch(obs).to(self.device)
+        with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.amp_dtype is not None):
+            actions = self.policy.predict_action(batch, generator=self.generator)
+        actions = actions[0].float().cpu()
+        if self.normalize_actions:
+            actions = _denormalize(actions, self.action_mean, self.action_std)
+        actions_np = actions.numpy().astype(np.float32)
+        return {"actions": _postprocess_libero_actions(actions_np, self.binarize_gripper, self.clip_actions)}
+
+    def reset(self) -> None:
+        return None
+
+    def _obs_to_batch(self, obs: dict[str, Any]) -> VLABatch:
+        image = _hwc_to_chw_float(obs["observation/image"], self.image_size)
+        wrist_image = _hwc_to_chw_float(obs["observation/wrist_image"], self.image_size)
+        state = torch.as_tensor(np.asarray(obs["observation/state"], dtype=np.float32)).reshape(-1)[: self.state_dim]
+        if self.normalize_state:
+            state = _normalize(state, self.state_mean, self.state_std)
+        sample = {
+            "images": torch.stack([image, wrist_image], dim=0),
+            "state": state,
+            "actions": None,
+            "action_mask": None,
+            "language": str(obs.get("prompt", "")),
+        }
+        return self.collator([sample])
+
+
+def _load_dataset_stats(dataset_config: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadata
+    except ImportError as exc:
+        raise ImportError("LeRobot is required for LIBERO eval stats.") from exc
+
+    repo_id = str(dataset_config["repo_id"])
+    root = dataset_config.get("local_path")
+    metadata = LeRobotDatasetMetadata(repo_id, root=root)
+    return getattr(metadata, "stats", {})
+
+
+def _hwc_to_chw_float(image: Any, image_size: int) -> torch.Tensor:
+    array = np.asarray(image)
+    if array.ndim != 3:
+        raise ValueError(f"Expected image rank 3, got {array.shape}")
+    tensor = torch.as_tensor(array)
+    if tensor.shape[0] in {1, 3}:
+        chw = tensor.float()
+    else:
+        chw = tensor.permute(2, 0, 1).float()
+    if chw.max() > 2:
+        chw = chw / 255.0
+    return F.interpolate(chw.unsqueeze(0), size=(image_size, image_size), mode="bilinear", align_corners=False)[0]
+
+
+def _normalize(value: torch.Tensor, mean: torch.Tensor | None, std: torch.Tensor | None) -> torch.Tensor:
+    if mean is None or std is None:
+        return value
+    return (value - mean.to(dtype=value.dtype)) / std.to(dtype=value.dtype)
+
+
+def _denormalize(value: torch.Tensor, mean: torch.Tensor | None, std: torch.Tensor | None) -> torch.Tensor:
+    if mean is None or std is None:
+        return value
+    return value * std.to(dtype=value.dtype) + mean.to(dtype=value.dtype)
+
+
+def _postprocess_libero_actions(actions: np.ndarray, binarize_gripper: bool, clip_actions: bool) -> np.ndarray:
+    actions = np.asarray(actions, dtype=np.float32).copy()
+    if clip_actions:
+        actions[..., :6] = np.clip(actions[..., :6], -1.0, 1.0)
+        actions[..., -1] = np.clip(actions[..., -1], -1.0, 1.0)
+    if binarize_gripper:
+        actions[..., -1] = np.where(actions[..., -1] >= 0.0, 1.0, -1.0)
+    return actions
+
+
+def _amp_dtype(name: str | None) -> torch.dtype | None:
+    if name is None or str(name) in {"none", "no", "float32"}:
+        return None
+    if str(name) in {"bfloat16", "bf16"}:
+        return torch.bfloat16
+    if str(name) in {"float16", "fp16"}:
+        return torch.float16
+    raise ValueError(f"Unsupported amp dtype: {name}")
