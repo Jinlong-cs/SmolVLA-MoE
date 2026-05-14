@@ -10,7 +10,7 @@ wandb/
 outputs/
 runs/
 checkpoints/
-data/
+/data/
 *.pt
 *.pth
 *.safetensors
