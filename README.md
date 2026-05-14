@@ -198,7 +198,7 @@ torchrun --standalone --nproc_per_node=8 scripts/train.py \
 The default run writes outputs to:
 
 ```text
-outputs/libero/smolvla_moe_0p5b_active/
+outputs/libero/smolvla_moe_full_finetune/
 ├── checkpoints/
 ├── metrics.jsonl
 └── wandb_id.txt
@@ -227,8 +227,8 @@ train:
     enabled: true
     workspace: null
     project: smolvla-moe-libero
-    name: smolvla_moe_0p5b_active_libero
-    group: libero_8gpu
+    name: smolvla_moe_full_finetune_libero
+    group: libero_8gpu_full_finetune
     mode: online
     resume: allow
     id_file: wandb_id.txt
@@ -260,7 +260,7 @@ The LIBERO closed-loop evaluation CLI shape is reserved:
 
 ```bash
 python scripts/eval_libero.py \
-  --checkpoint outputs/libero/smolvla_moe_0p5b_active/checkpoints/final.pt \
+  --checkpoint outputs/libero/smolvla_moe_full_finetune/checkpoints/final.pt \
   --suite all \
   --num-trials 50
 ```

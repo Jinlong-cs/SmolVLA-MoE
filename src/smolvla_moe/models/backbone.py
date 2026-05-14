@@ -98,6 +98,8 @@ class HFSmolVLM2Backbone(nn.Module):
             kwargs["attn_implementation"] = str(attn_implementation)
         self.model = AutoModelForImageTextToText.from_pretrained(model_name, **kwargs)
         self.hidden_dim = _infer_hidden_dim(self.model.config)
+        if bool(config.get("gradient_checkpointing", False)) and hasattr(self.model, "gradient_checkpointing_enable"):
+            self.model.gradient_checkpointing_enable()
 
         if self.freeze:
             self.model.requires_grad_(False)

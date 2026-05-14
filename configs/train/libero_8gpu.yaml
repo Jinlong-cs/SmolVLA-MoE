@@ -3,7 +3,7 @@ defaults:
   - ../dataset/libero.yaml
 
 seed: 7
-output_dir: outputs/libero/smolvla_moe_0p5b_active
+output_dir: outputs/libero/smolvla_moe_full_finetune
 device: cuda
 
 train:
@@ -21,8 +21,8 @@ train:
     enabled: true
     workspace: null
     project: smolvla-moe-libero
-    name: smolvla_moe_0p5b_active_libero
-    group: libero_8gpu
+    name: smolvla_moe_full_finetune_libero
+    group: libero_8gpu_full_finetune
     mode: online
     dir: null
     tags:
@@ -30,7 +30,8 @@ train:
       - libero
       - flow-matching
       - moe-action-decoder
-    notes: "SmolVLA-MoE first LIBERO 8GPU training run."
+      - full-finetune
+    notes: "SmolVLA-MoE full finetune LIBERO 8GPU training run."
     resume: allow
     id_file: wandb_id.txt
     log_code: false

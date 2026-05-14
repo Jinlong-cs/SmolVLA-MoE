@@ -6,7 +6,8 @@ model:
     context_dim: 960
     max_text_len: 128
     image_size: 256
-    freeze: true
+    freeze: false
+    gradient_checkpointing: true
     trust_remote_code: true
     torch_dtype: bfloat16
   action_decoder:

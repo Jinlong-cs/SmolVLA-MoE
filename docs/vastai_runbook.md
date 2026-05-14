@@ -39,15 +39,15 @@ The default W&B run is configured as:
 
 ```text
 project: smolvla-moe-libero
-name: smolvla_moe_0p5b_active_libero
-group: libero_8gpu
+name: smolvla_moe_full_finetune_libero
+group: libero_8gpu_full_finetune
 mode: online
 ```
 
 The script writes the W&B id to:
 
 ```text
-outputs/libero/smolvla_moe_0p5b_active/wandb_id.txt
+outputs/libero/smolvla_moe_full_finetune/wandb_id.txt
 ```
 
 If the same output directory is reused, `resume: allow` will reconnect to the existing W&B run. Use a new `output_dir` or delete that id file when starting a truly new run.
