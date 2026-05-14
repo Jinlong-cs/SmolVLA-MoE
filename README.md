@@ -45,6 +45,8 @@ SmolVLA-MoE/
 │       ├── libero_smoke.yaml            # Synthetic-data smoke config
 │       └── libero_8gpu.yaml             # 8GPU LIBERO training config draft
 ├── docs/
+│   ├── assets/
+│   │   └── smolvla_moe_architecture.svg # README architecture figure
 │   ├── architecture.md                  # Design notes and required ablations
 │   └── vastai_runbook.md                # Remote training checklist
 ├── scripts/
@@ -89,6 +91,10 @@ pip install -e ".[hf,train,dev]"
 ```
 
 ## Model Design
+
+<p align="center">
+  <img src="docs/assets/smolvla_moe_architecture.svg" alt="SmolVLA-MoE architecture" width="100%">
+</p>
 
 The intended production model uses a SmolVLM2-family backbone and a flow-matching MoE action expert:
 

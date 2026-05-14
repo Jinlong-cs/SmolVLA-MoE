@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="760" viewBox="0 0 1500 760" role="img" aria-labelledby="title desc">
+  <title id="title">SmolVLA-MoE architecture</title>
+  <desc id="desc">A CVPR-style block diagram showing multi-view images, language, proprioception, a dense SmolVLM2 backbone, a flow-matching action decoder, and a shared-routed MoE FFN.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2f3a4a"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2f5f9f"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9a5b16"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#203040" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .bg { fill: #ffffff; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; rx: 12; }
+      .box { stroke-width: 1.8; rx: 10; filter: url(#shadow); }
+      .input { fill: #eef6ff; stroke: #7aa7d9; }
+      .backbone { fill: #eff7ef; stroke: #78a879; }
+      .decoder { fill: #fff7e8; stroke: #d39b42; }
+      .moe { fill: #f7efff; stroke: #9b7ad6; }
+      .output { fill: #eefbf6; stroke: #58a983; }
+      .small { font: 500 17px Arial, Helvetica, sans-serif; fill: #334155; }
+      .label { font: 600 19px Arial, Helvetica, sans-serif; fill: #1f2937; }
+      .title { font: 700 28px Arial, Helvetica, sans-serif; fill: #111827; }
+      .caption { font: 500 15px Arial, Helvetica, sans-serif; fill: #64748b; }
+      .tiny { font: 500 13px Arial, Helvetica, sans-serif; fill: #64748b; }
+      .math { font: 600 16px Arial, Helvetica, sans-serif; fill: #374151; }
+      .arrow { stroke: #2f3a4a; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .arrowBlue { stroke: #2f5f9f; stroke-width: 2.2; fill: none; marker-end: url(#arrowBlue); }
+      .arrowOrange { stroke: #9a5b16; stroke-width: 2.2; fill: none; marker-end: url(#arrowOrange); }
+      .dash { stroke-dasharray: 7 6; }
+      .thin { stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1500" height="760"/>
+  <text x="750" y="44" text-anchor="middle" class="title">SmolVLA-MoE: Dense VLM + Flow-Matching MoE Action Expert</text>
+  <text x="750" y="72" text-anchor="middle" class="caption">Benchmark-agnostic VLA scaffold; LIBERO is the first target benchmark</text>
+
+  <rect x="42" y="108" width="306" height="548" class="panel"/>
+  <text x="195" y="139" text-anchor="middle" class="label">Observation Inputs</text>
+
+  <rect x="82" y="170" width="226" height="94" class="box input"/>
+  <text x="195" y="205" text-anchor="middle" class="label">Multi-view RGB</text>
+  <text x="195" y="234" text-anchor="middle" class="small">agentview, wrist, ...</text>
+
+  <rect x="82" y="304" width="226" height="94" class="box input"/>
+  <text x="195" y="339" text-anchor="middle" class="label">Language</text>
+  <text x="195" y="368" text-anchor="middle" class="small">task instruction</text>
+
+  <rect x="82" y="438" width="226" height="94" class="box input"/>
+  <text x="195" y="473" text-anchor="middle" class="label">Proprioception</text>
+  <text x="195" y="502" text-anchor="middle" class="small">state / robot pose</text>
+
+  <rect x="400" y="180" width="250" height="210" class="box backbone"/>
+  <text x="525" y="220" text-anchor="middle" class="label">Dense VLM Backbone</text>
+  <text x="525" y="250" text-anchor="middle" class="small">SmolVLM2-family</text>
+  <text x="525" y="280" text-anchor="middle" class="small">vision-language context</text>
+  <line x1="438" y1="318" x2="612" y2="318" stroke="#78a879" stroke-width="1.4"/>
+  <text x="525" y="348" text-anchor="middle" class="math">c = f_vlm(o_img, l)</text>
+
+  <rect x="718" y="186" width="210" height="88" class="box backbone"/>
+  <text x="823" y="220" text-anchor="middle" class="label">Context Tokens</text>
+  <text x="823" y="248" text-anchor="middle" class="small">cross-attention memory</text>
+
+  <rect x="397" y="468" width="256" height="126" class="box decoder"/>
+  <text x="525" y="505" text-anchor="middle" class="label">Flow Matching</text>
+  <text x="525" y="535" text-anchor="middle" class="math">x_t = (1 - t) z + t a</text>
+  <text x="525" y="565" text-anchor="middle" class="small">train: predict velocity field</text>
+
+  <rect x="722" y="360" width="360" height="254" class="box decoder"/>
+  <text x="902" y="398" text-anchor="middle" class="label">Action Transformer Decoder</text>
+  <text x="902" y="426" text-anchor="middle" class="small">repeated L blocks</text>
+
+  <rect x="758" y="455" width="132" height="60" class="box decoder"/>
+  <text x="824" y="481" text-anchor="middle" class="small">Self-Attn</text>
+  <text x="824" y="503" text-anchor="middle" class="tiny">action tokens</text>
+
+  <rect x="916" y="455" width="132" height="60" class="box decoder"/>
+  <text x="982" y="481" text-anchor="middle" class="small">Cross-Attn</text>
+  <text x="982" y="503" text-anchor="middle" class="tiny">to context c</text>
+
+  <rect x="805" y="540" width="194" height="54" class="box moe"/>
+  <text x="902" y="574" text-anchor="middle" class="label">MoE FFN</text>
+
+  <rect x="1138" y="300" width="284" height="318" class="panel"/>
+  <text x="1280" y="333" text-anchor="middle" class="label">Shared + Routed MoE</text>
+
+  <rect x="1174" y="362" width="212" height="58" class="box moe"/>
+  <text x="1280" y="396" text-anchor="middle" class="small">Shared SwiGLU Expert</text>
+  <text x="1280" y="416" text-anchor="middle" class="tiny">always active</text>
+
+  <rect x="1174" y="456" width="212" height="58" class="box moe"/>
+  <text x="1280" y="490" text-anchor="middle" class="small">Router</text>
+  <text x="1280" y="510" text-anchor="middle" class="tiny">top-1 chunk-level</text>
+
+  <rect x="1160" y="548" width="52" height="42" class="box moe"/>
+  <text x="1186" y="574" text-anchor="middle" class="tiny">E1</text>
+  <rect x="1222" y="548" width="52" height="42" class="box moe"/>
+  <text x="1248" y="574" text-anchor="middle" class="tiny">E2</text>
+  <rect x="1284" y="548" width="52" height="42" class="box moe"/>
+  <text x="1310" y="574" text-anchor="middle" class="tiny">E3</text>
+  <rect x="1346" y="548" width="52" height="42" class="box moe"/>
+  <text x="1372" y="574" text-anchor="middle" class="tiny">E4</text>
+
+  <rect x="1148" y="646" width="260" height="54" class="box output"/>
+  <text x="1278" y="679" text-anchor="middle" class="label">Velocity Head</text>
+
+  <rect x="1182" y="160" width="204" height="78" class="box output"/>
+  <text x="1284" y="192" text-anchor="middle" class="label">Action Chunk</text>
+  <text x="1284" y="219" text-anchor="middle" class="math">a_hat[1:H]</text>
+
+  <path d="M 308 217 C 350 217, 360 226, 400 246" class="arrow"/>
+  <path d="M 308 351 C 350 351, 360 336, 400 315" class="arrow"/>
+  <path d="M 650 250 L 718 229" class="arrowBlue"/>
+  <path d="M 928 230 C 1020 230, 1075 274, 1138 344" class="arrowBlue dash"/>
+  <path d="M 308 485 C 470 430, 630 392, 722 405" class="arrowOrange dash"/>
+  <path d="M 653 531 C 682 531, 700 514, 722 493" class="arrowOrange"/>
+  <path d="M 824 515 L 824 540" class="arrowOrange"/>
+  <path d="M 982 515 C 982 530, 970 535, 956 540" class="arrowOrange"/>
+  <path d="M 999 567 C 1052 567, 1080 500, 1138 485" class="arrowOrange"/>
+  <path d="M 1280 420 L 1280 456" class="arrowOrange"/>
+  <path d="M 1280 514 C 1280 532, 1186 532, 1186 548" class="arrowOrange thin"/>
+  <path d="M 1280 514 C 1280 532, 1248 532, 1248 548" class="arrowOrange thin"/>
+  <path d="M 1280 514 C 1280 532, 1310 532, 1310 548" class="arrowOrange thin"/>
+  <path d="M 1280 514 C 1280 532, 1372 532, 1372 548" class="arrowOrange thin"/>
+  <path d="M 1280 618 L 1280 646" class="arrowOrange"/>
+  <path d="M 1280 646 C 1280 600, 1082 626, 1000 585" class="arrowOrange dash"/>
+  <path d="M 1280 646 C 1325 575, 1332 338, 1306 238" class="arrow"/>
+  <path d="M 525 468 C 555 420, 650 392, 722 405" class="arrowOrange dash"/>
+
+  <text x="358" y="207" text-anchor="middle" class="tiny">images</text>
+  <text x="363" y="349" text-anchor="middle" class="tiny">text</text>
+  <text x="505" y="428" text-anchor="middle" class="tiny">noise z, action a, time t</text>
+  <text x="676" y="222" text-anchor="middle" class="tiny">context c</text>
+  <text x="1092" y="470" text-anchor="middle" class="tiny">router context</text>
+  <text x="1325" y="636" text-anchor="start" class="tiny">v_theta(x_t, t, c, s)</text>
+
+  <rect x="72" y="680" width="1356" height="42" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.2" rx="10"/>
+  <text x="750" y="706" text-anchor="middle" class="caption">Speed comes from a compact dense VLM, action chunking, few flow steps, and top-1 MoE routing; capacity comes from shared + routed action experts.</text>
+</svg>
