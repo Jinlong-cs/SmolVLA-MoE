@@ -2,12 +2,13 @@ model:
   backbone:
     type: hf_smolvlm2
     model_name: HuggingFaceTB/SmolVLM2-500M-Video-Instruct
-    hidden_dim: 768
-    context_dim: 768
+    hidden_dim: 960
+    context_dim: 960
     max_text_len: 128
-    image_size: 224
+    image_size: 256
     freeze: true
     trust_remote_code: true
+    torch_dtype: bfloat16
   action_decoder:
     hidden_dim: 768
     action_dim: 7

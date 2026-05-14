@@ -19,7 +19,7 @@ class SmolVLAMoEPolicy(nn.Module):
         decoder_config = dict(model_config["action_decoder"])
 
         self.backbone = build_backbone(backbone_config)
-        context_dim = int(backbone_config.get("context_dim", getattr(self.backbone, "hidden_dim", decoder_config["hidden_dim"])))
+        context_dim = int(getattr(self.backbone, "hidden_dim", backbone_config.get("context_dim", decoder_config["hidden_dim"])))
         self.action_decoder = FlowMatchingActionDecoder(decoder_config, context_dim=context_dim)
         self.flow = FlowMatchingObjective(model_config.get("flow", {}))
 
@@ -35,7 +35,7 @@ class SmolVLAMoEPolicy(nn.Module):
         if batch.actions is None:
             raise ValueError("batch.actions is required for training")
         context, context_mask = self.encode_context(batch)
-        return self.flow.loss(self.action_decoder, batch.actions, context, context_mask, batch.state)
+        return self.flow.loss(self.action_decoder, batch.actions, context, context_mask, batch.state, batch.action_mask)
 
     def forward(self, batch: VLABatch) -> dict[str, torch.Tensor]:
         return self.compute_loss(batch)

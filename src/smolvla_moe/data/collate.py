@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import torch
+import torch.nn.functional as F
 
 from smolvla_moe.data.batch import VLABatch
 from smolvla_moe.data.text import HashTokenizer
@@ -34,6 +35,11 @@ class VLACollator:
         actions = (
             torch.stack([sample["actions"] for sample in samples], dim=0) if samples[0].get("actions") is not None else None
         )
+        action_mask = (
+            torch.stack([sample["action_mask"] for sample in samples], dim=0)
+            if samples[0].get("action_mask") is not None
+            else None
+        )
         language = [str(sample.get("language", "")) for sample in samples]
 
         if self.backbone_type == "hf_smolvlm2":
@@ -51,6 +57,7 @@ class VLACollator:
             attention_mask=attention_mask,
             state=state,
             actions=actions,
+            action_mask=action_mask,
             language=language,
             extras=extras,
         )
@@ -58,9 +65,22 @@ class VLACollator:
     def _hf_inputs(self, images: torch.Tensor, language: list[str]) -> dict[str, torch.Tensor]:
         if self.processor is None:
             raise RuntimeError("HF processor is not initialized")
-        # SmolVLM processors accept nested image lists. Preserve all configured cameras instead of using only one view.
+        # SmolVLM processors require one <image> placeholder per camera view.
+        image_tokens = "<image>" * int(images.shape[1])
+        text = [f"{image_tokens}{instruction}" for instruction in language]
         camera_images = [
-            [camera.permute(1, 2, 0).cpu().numpy() for camera in sample_images]
+            [F.interpolate(camera.unsqueeze(0), size=(256, 256), mode="bilinear", align_corners=False)[0]
+             .permute(1, 2, 0)
+             .cpu()
+             .numpy()
+             for camera in sample_images]
             for sample_images in images
         ]
-        return self.processor(images=camera_images, text=language, return_tensors="pt", padding=True)
+        return self.processor(
+            images=camera_images,
+            text=text,
+            return_tensors="pt",
+            padding=True,
+            size={"longest_edge": 256},
+            do_rescale=False,
+        )

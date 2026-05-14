@@ -30,5 +30,6 @@ class SyntheticVLADataset:
                 attention_mask=torch.ones(self.batch_size, self.text_len, dtype=torch.long),
                 state=torch.randn(self.batch_size, self.state_dim),
                 actions=torch.randn(self.batch_size, self.horizon, self.action_dim),
+                action_mask=torch.ones(self.batch_size, self.horizon, dtype=torch.bool),
                 language=["synthetic instruction"] * self.batch_size,
             )

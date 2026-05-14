@@ -88,8 +88,15 @@ class HFSmolVLM2Backbone(nn.Module):
 
         model_name = str(config["model_name"])
         trust_remote_code = bool(config.get("trust_remote_code", True))
-        self.model = AutoModelForImageTextToText.from_pretrained(model_name, trust_remote_code=trust_remote_code)
-        self.hidden_dim = int(config.get("context_dim", self.model.config.hidden_size))
+        kwargs: dict[str, Any] = {"trust_remote_code": trust_remote_code}
+        torch_dtype = _torch_dtype(config.get("torch_dtype", "auto"))
+        if torch_dtype is not None:
+            kwargs["torch_dtype"] = torch_dtype
+        attn_implementation = config.get("attn_implementation")
+        if attn_implementation not in (None, "", "null"):
+            kwargs["attn_implementation"] = str(attn_implementation)
+        self.model = AutoModelForImageTextToText.from_pretrained(model_name, **kwargs)
+        self.hidden_dim = _infer_hidden_dim(self.model.config)
 
         if bool(config.get("freeze", True)):
             self.model.requires_grad_(False)
@@ -121,3 +128,30 @@ def build_backbone(config: dict[str, Any]) -> nn.Module:
     if backbone_type == "hf_smolvlm2":
         return HFSmolVLM2Backbone(config)
     raise ValueError(f"Unsupported backbone type: {backbone_type}")
+
+
+def _torch_dtype(value: Any) -> torch.dtype | str | None:
+    if value is None:
+        return None
+    name = str(value)
+    if name in {"auto", "torch_dtype=auto"}:
+        return "auto"
+    if name in {"bfloat16", "bf16", "torch.bfloat16"}:
+        return torch.bfloat16
+    if name in {"float16", "fp16", "torch.float16"}:
+        return torch.float16
+    if name in {"float32", "fp32", "torch.float32"}:
+        return torch.float32
+    raise ValueError(f"Unsupported torch_dtype: {value}")
+
+
+def _infer_hidden_dim(config: Any) -> int:
+    for path in (("text_config", "hidden_size"), ("hidden_size",), ("vision_config", "hidden_size")):
+        cursor = config
+        for key in path:
+            cursor = getattr(cursor, key, None)
+            if cursor is None:
+                break
+        if cursor is not None:
+            return int(cursor)
+    raise ValueError("Could not infer hidden size from Hugging Face model config.")

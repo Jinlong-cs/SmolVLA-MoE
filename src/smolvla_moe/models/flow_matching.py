@@ -20,6 +20,7 @@ class FlowMatchingObjective:
         context: torch.Tensor,
         context_mask: torch.Tensor | None,
         state: torch.Tensor | None,
+        action_mask: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         batch_size = actions.shape[0]
         t = torch.rand(batch_size, device=actions.device)
@@ -31,13 +32,20 @@ class FlowMatchingObjective:
         target_velocity = actions - noise
 
         pred_velocity, aux = decoder(noisy_actions, t, context, context_mask, state)
-        flow_loss = F.mse_loss(pred_velocity, target_velocity)
+        if action_mask is None:
+            flow_loss = F.mse_loss(pred_velocity, target_velocity)
+            valid_action_fraction = torch.ones((), device=actions.device, dtype=actions.dtype)
+        else:
+            weights = action_mask.to(dtype=pred_velocity.dtype).unsqueeze(-1)
+            squared_error = (pred_velocity - target_velocity).square() * weights
+            flow_loss = squared_error.sum() / (weights.sum() * pred_velocity.shape[-1]).clamp_min(1.0)
+            valid_action_fraction = weights.mean()
         total_loss = flow_loss
         for key, value in aux.items():
             if key.endswith("_loss"):
                 total_loss = total_loss + value
 
-        metrics = {"loss": total_loss, "flow_loss": flow_loss}
+        metrics = {"loss": total_loss, "flow_loss": flow_loss, "valid_action_fraction": valid_action_fraction}
         metrics.update(aux)
         return metrics
 

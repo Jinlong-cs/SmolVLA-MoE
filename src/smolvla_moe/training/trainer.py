@@ -55,6 +55,7 @@ def train(config: dict[str, Any], max_steps_override: int | None = None) -> None
     if rank == 0:
         output_dir.mkdir(parents=True, exist_ok=True)
     save_every = int(train_config.get("save_every", 0))
+    final_checkpoint = bool(train_config.get("save_final_checkpoint", True))
     log_every = int(train_config.get("log_every", 20))
     grad_clip_norm = float(train_config.get("grad_clip_norm", 0.0))
     jsonl_logger = JsonlLogger(output_dir) if rank == 0 else None
@@ -133,10 +134,11 @@ def train(config: dict[str, Any], max_steps_override: int | None = None) -> None
             save_checkpoint(checkpoint_path, _unwrap(model), optimizer, step, config)
             wandb_logger.log_checkpoint(checkpoint_path, step, aliases=[f"step-{step}"])
 
-    if rank == 0:
+    if rank == 0 and final_checkpoint:
         final_path = output_dir / "checkpoints" / "final.pt"
         save_checkpoint(final_path, _unwrap(model), optimizer, max_steps, config)
         wandb_logger.log_checkpoint(final_path, max_steps, aliases=["final", f"step-{max_steps}"])
+    if rank == 0:
         wandb_logger.finish()
     _cleanup_distributed(world_size)
 

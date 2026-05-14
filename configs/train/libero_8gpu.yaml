@@ -14,6 +14,7 @@ train:
   grad_clip_norm: 1.0
   log_every: 20
   save_every: 5000
+  save_final_checkpoint: true
   ddp_find_unused_parameters: true
   amp_dtype: bfloat16
   wandb:
