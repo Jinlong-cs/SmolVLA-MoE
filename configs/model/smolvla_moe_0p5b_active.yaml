@@ -21,3 +21,26 @@ model:
   flow:
     train_time_epsilon: 0.001
     inference_steps: 4
+  flash:
+    enabled: true
+    train_draft: true
+    loss_weight: 0.2
+    draft:
+      hidden_dim: 768
+      num_layers: 2
+      num_heads: 12
+      ffn_mult: 4
+      dropout: 0.0
+    loss:
+      huber_beta: 1.0
+      prefix_cap: 5
+      prefix_gamma: 0.9
+      tail_weight: 0.1
+    verify:
+      timesteps:
+        - 0.75
+        - 0.9
+      radius: 0.08
+      dist_dims: 6
+      eval_horizon: 5
+      full_fallback: true

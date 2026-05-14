@@ -31,6 +31,7 @@ def train(config: dict[str, Any], max_steps_override: int | None = None) -> None
     trainable_params = count_parameters(model, trainable_only=True)
     action_decoder_params = count_parameters(model.action_decoder)
     backbone_params = count_parameters(model.backbone)
+    flash_draft_params = count_parameters(model.flash_draft_head) if model.flash_draft_head is not None else 0
     if world_size > 1:
         model = DistributedDataParallel(
             model,
@@ -67,7 +68,7 @@ def train(config: dict[str, Any], max_steps_override: int | None = None) -> None
         run_url = f" wandb_url={wandb_logger.url}" if wandb_logger.url else ""
         print(
             "device=%s world_size=%d total_params=%s trainable_params=%s backbone_params=%s "
-            "action_decoder_params=%s%s"
+            "action_decoder_params=%s flash_draft_params=%s%s"
             % (
                 device,
                 world_size,
@@ -75,6 +76,7 @@ def train(config: dict[str, Any], max_steps_override: int | None = None) -> None
                 f"{trainable_params:,}",
                 f"{backbone_params:,}",
                 f"{action_decoder_params:,}",
+                f"{flash_draft_params:,}",
                 run_url,
             )
         )
@@ -121,6 +123,7 @@ def train(config: dict[str, Any], max_steps_override: int | None = None) -> None
             logged["params/trainable"] = float(trainable_params)
             logged["params/backbone"] = float(backbone_params)
             logged["params/action_decoder"] = float(action_decoder_params)
+            logged["params/flash_draft"] = float(flash_draft_params)
             logged.update(collect_resource_metrics())
             print(_format_metrics(step, max_steps, logged))
             if jsonl_logger is not None:
@@ -228,7 +231,15 @@ def _detach_metrics(metrics: dict[str, torch.Tensor]) -> dict[str, float]:
 
 
 def _format_metrics(step: int, max_steps: int, metrics: dict[str, float]) -> str:
-    keys = ["train/loss", "train/flow_loss", "train/load_balance_loss", "train/router_z_loss", "train/grad_norm", "train/lr"]
+    keys = [
+        "train/loss",
+        "train/flow_loss",
+        "train/flash_draft_loss",
+        "train/load_balance_loss",
+        "train/router_z_loss",
+        "train/grad_norm",
+        "train/lr",
+    ]
     summary = " ".join(f"{key}={metrics[key]:.5f}" for key in keys if key in metrics)
     return f"step={step}/{max_steps} {summary}"
 

@@ -39,6 +39,7 @@ def main() -> int:
     parser.add_argument("--no-save-videos", action="store_true")
     parser.add_argument("--no-binarize-gripper", action="store_true")
     parser.add_argument("--no-clip-actions", action="store_true")
+    parser.add_argument("--use-flash", action="store_true")
     parser.add_argument("--server-log", default=None)
     args = parser.parse_args()
 
@@ -77,6 +78,7 @@ def main() -> int:
             subprocess.run(cmd, check=True, env=_eval_env(args.openpi_root, root))
             results.append(json.loads(result_path.read_text(encoding="utf-8")))
         summary = _summarize(results)
+        summary["policy_runtime"] = {"use_flash": bool(args.use_flash)}
         if args.no_save_videos:
             summary["videos"] = {"enabled": False}
         else:
@@ -122,6 +124,8 @@ def _start_server(args: argparse.Namespace, root: Path, server_log: Path) -> sub
         cmd.append("--no-binarize-gripper")
     if args.no_clip_actions:
         cmd.append("--no-clip-actions")
+    if args.use_flash:
+        cmd.append("--use-flash")
     return subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, env=_eval_env(args.openpi_root, root))
 
 

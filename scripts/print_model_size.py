@@ -24,6 +24,8 @@ def main() -> int:
     print(f"trainable_params={count_parameters(model, trainable_only=True):,}")
     print(f"backbone_params={count_parameters(model.backbone):,}")
     print(f"action_decoder_params={count_parameters(model.action_decoder):,}")
+    if model.flash_draft_head is not None:
+        print(f"flash_draft_params={count_parameters(model.flash_draft_head):,}")
     return 0
 
 

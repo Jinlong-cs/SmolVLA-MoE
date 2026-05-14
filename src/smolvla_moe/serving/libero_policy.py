@@ -27,6 +27,7 @@ class LiberoSmolVLAMoEPolicy:
         seed: int | None = None,
         binarize_gripper: bool = True,
         clip_actions: bool = True,
+        use_flash: bool = False,
     ) -> None:
         payload = torch.load(checkpoint, map_location="cpu")
         self.config = load_config(config_path) if config_path is not None else payload["config"]
@@ -38,6 +39,7 @@ class LiberoSmolVLAMoEPolicy:
             self.generator.manual_seed(int(seed))
         self.binarize_gripper = bool(binarize_gripper)
         self.clip_actions = bool(clip_actions)
+        self.use_flash = bool(use_flash)
 
         self.policy = SmolVLAMoEPolicy(self.config).to(self.device)
         missing, unexpected = self.policy.load_state_dict(payload["model"], strict=False)
@@ -63,13 +65,19 @@ class LiberoSmolVLAMoEPolicy:
             "horizon": int(model_config["action_decoder"]["horizon"]),
             "action_dim": int(model_config["action_decoder"]["action_dim"]),
             "flow_inference_steps": int(model_config.get("flow", {}).get("inference_steps", 4)),
+            "flash_enabled": bool(model_config.get("flash", {}).get("enabled", False)),
+            "flash_runtime": self.use_flash,
         }
 
     @torch.no_grad()
     def infer(self, obs: dict[str, Any]) -> dict[str, Any]:
         batch = self._obs_to_batch(obs).to(self.device)
         with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.amp_dtype is not None):
-            actions = self.policy.predict_action(batch, generator=self.generator)
+            actions = (
+                self.policy.predict_action_flash(batch, generator=self.generator)
+                if self.use_flash
+                else self.policy.predict_action(batch, generator=self.generator)
+            )
         actions = actions[0].float().cpu()
         if self.normalize_actions:
             actions = _denormalize(actions, self.action_mean, self.action_std)

@@ -23,6 +23,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--no-binarize-gripper", action="store_true")
     parser.add_argument("--no-clip-actions", action="store_true")
+    parser.add_argument("--use-flash", action="store_true")
     args = parser.parse_args()
 
     from openpi.serving.websocket_policy_server import WebsocketPolicyServer
@@ -35,6 +36,7 @@ def main() -> int:
         seed=args.seed,
         binarize_gripper=not args.no_binarize_gripper,
         clip_actions=not args.no_clip_actions,
+        use_flash=args.use_flash,
     )
     logging.info("Serving SmolVLA-MoE policy on %s:%d with metadata=%s", args.host, args.port, policy.metadata)
     server = WebsocketPolicyServer(policy=policy, host=args.host, port=args.port, metadata=policy.metadata)

@@ -15,6 +15,7 @@ SmolVLA-MoE is designed around:
 - a continuous flow-matching action decoder,
 - a shared + routed sparse MoE FFN inside the action expert,
 - top-1 chunk-level routing for efficient inference,
+- an optional FLASH draft action head with flow-verifier inference,
 - W&B and local JSONL observability for reproducible benchmark runs.
 
 ## Index
@@ -94,11 +95,17 @@ Dense VLM backbone
 context tokens
         |
         v
+FLASH draft action head
+  - parallel action queries
+  - prefix-weighted Huber draft loss
+        |
+        v
 Flow-matching action decoder
   - action self-attention
   - cross-attention to VLM context
   - shared SwiGLU expert
   - top-1 routed SwiGLU expert
+  - verifier for drafted chunks
         |
         v
 continuous action chunk
@@ -109,6 +116,7 @@ Flow matching defines the continuous action generation objective. MoE defines ho
 ```text
 Flow matching: how to generate action chunks.
 MoE: which action-decoder expert capacity to use.
+FLASH: how to draft and locally verify action chunks for faster inference.
 ```
 
 The default MoE design is:
@@ -197,11 +205,11 @@ train:
 Logged namespaces:
 
 ```text
-train/*        loss, flow loss, router losses, grad norm, lr
+train/*        loss, flow loss, FLASH draft loss, router losses, grad norm, lr
 performance/*  steps/s and samples/s
 resource/*     GPU and host resource metrics when available
 moe/*          routed expert usage
-params/*       total/trainable/backbone/action decoder parameter counts
+params/*       total/trainable/backbone/action decoder/FLASH draft parameter counts
 ```
 
 `wandb_id.txt` is written inside the output directory. If the same output directory is reused, `resume: allow` will reconnect to the existing run. Use a fresh `output_dir` or remove `wandb_id.txt` for a new run.
@@ -212,6 +220,7 @@ The policy sampling interface is implemented through:
 
 ```python
 actions = policy.predict_action(batch)
+flash_actions = policy.predict_action_flash(batch)
 ```
 
 The LIBERO closed-loop evaluation CLI shape is reserved:
@@ -222,6 +231,17 @@ python scripts/eval_libero.py \
   --suite all \
   --num-trials 50 \
   --output-dir outputs/libero/eval/final
+```
+
+To evaluate the FLASH runtime path for a checkpoint trained with `model.flash.enabled=true`, add:
+
+```bash
+python scripts/eval_libero.py \
+  --checkpoint outputs/libero/smolvla_moe_full_finetune/checkpoints/final.pt \
+  --suite all \
+  --num-trials 50 \
+  --output-dir outputs/libero/eval/final_flash \
+  --use-flash
 ```
 
 By default, evaluation saves rollout videos through the OpenPI LIBERO runner:
@@ -251,6 +271,7 @@ Implemented:
 - Hugging Face SmolVLM2 backbone hook,
 - flow-matching objective,
 - shared + routed MoE action decoder,
+- FLASH draft action head and flow-verifier runtime path,
 - LeRobot/LIBERO adapter scaffold,
 - torchrun-compatible trainer,
 - W&B and JSONL observability,
