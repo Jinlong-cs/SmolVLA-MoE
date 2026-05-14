@@ -81,7 +81,7 @@ class LiberoSmolVLAMoEPolicy:
     def _obs_to_batch(self, obs: dict[str, Any]) -> VLABatch:
         image = _hwc_to_chw_float(obs["observation/image"], self.image_size)
         wrist_image = _hwc_to_chw_float(obs["observation/wrist_image"], self.image_size)
-        state = torch.as_tensor(np.asarray(obs["observation/state"], dtype=np.float32)).reshape(-1)[: self.state_dim]
+        state = torch.as_tensor(np.array(obs["observation/state"], dtype=np.float32, copy=True)).reshape(-1)[: self.state_dim]
         if self.normalize_state:
             state = _normalize(state, self.state_mean, self.state_std)
         sample = {
