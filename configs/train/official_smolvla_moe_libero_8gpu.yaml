@@ -3,7 +3,7 @@ defaults:
   - ../dataset/libero_official_smolvla.yaml
 
 seed: 7
-output_dir: outputs/libero/official_smolvla_moe_residual
+output_dir: outputs/libero/official_smolvla_moe_residual_shuffle_zeroout
 device: cuda
 
 train:
@@ -21,8 +21,8 @@ train:
     enabled: true
     workspace: null
     project: smolvla-moe-libero
-    name: official_smolvla_moe_residual_libero
-    group: official_smolvla_moe_residual_8gpu
+    name: official_smolvla_moe_residual_shuffle_zeroout_libero
+    group: official_smolvla_moe_residual_shuffle_zeroout_8gpu
     mode: online
     dir: null
     tags:
@@ -31,7 +31,9 @@ train:
       - libero
       - residual-moe-adapter
       - flow-matching
-    notes: "Official HuggingFaceVLA/smolvla_libero with residual top-1 MoE adapters in the action expert MLPs."
+      - shuffled-data
+      - zero-init-residual-output
+    notes: "Official HuggingFaceVLA/smolvla_libero with residual top-1 MoE adapters in the action expert MLPs; shuffled LIBERO data and zero-initialized residual expert output preserve the dense policy at init while allowing adapter gradients."
     resume: allow
     id_file: wandb_id.txt
     log_code: false

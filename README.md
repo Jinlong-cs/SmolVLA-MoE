@@ -147,7 +147,8 @@ The official branch default MoE adapter is:
 ```
 
 By default, the official dense checkpoint is frozen and only the residual MoE routers, low-rank experts, and residual
-scales are trainable. With `init_scale: 0.0`, step-0 behavior matches the released dense official policy.
+scales are trainable. The residual expert output projection is zero-initialized and `init_scale: 1.0`, so step-0
+behavior still matches the released dense official policy while the residual adapter can receive gradients immediately.
 
 ### Official-Compatible MoE Path
 

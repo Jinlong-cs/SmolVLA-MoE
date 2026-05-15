@@ -16,9 +16,8 @@ model:
     num_experts: 4
     top_k: 1
     adapter_dim: 256
-    init_scale: 0.0
+    init_scale: 1.0
     load_balance_weight: 0.01
     router_z_loss_weight: 0.0001
     layer_start: 0
     layer_stride: 1
-

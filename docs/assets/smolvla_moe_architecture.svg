@@ -108,7 +108,7 @@
 
   <rect x="814" y="582" width="262" height="58" class="box output"/>
   <text x="945" y="606" text-anchor="middle" class="math">y = dense(x) + alpha * MoE(x)</text>
-  <text x="945" y="628" text-anchor="middle" class="tiny">init alpha=0 protects official behavior</text>
+  <text x="945" y="628" text-anchor="middle" class="tiny">zero-init output protects official behavior</text>
 
   <rect x="1200" y="130" width="260" height="510" class="panel"/>
   <text x="1330" y="162" text-anchor="middle" class="label">Trainable Residual MoE</text>
@@ -132,7 +132,7 @@
 
   <rect x="1234" y="526" width="192" height="64" class="box moe"/>
   <text x="1330" y="554" text-anchor="middle" class="label">Residual Scale</text>
-  <text x="1330" y="577" text-anchor="middle" class="tiny trainText">trainable alpha, init 0</text>
+  <text x="1330" y="577" text-anchor="middle" class="tiny trainText">trainable alpha, init 1</text>
 
   <rect x="1070" y="704" width="294" height="72" class="box output"/>
   <text x="1217" y="733" text-anchor="middle" class="label">Continuous Action Chunk</text>

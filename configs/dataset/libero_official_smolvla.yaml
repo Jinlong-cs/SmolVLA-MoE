@@ -16,5 +16,5 @@ dataset:
   image_size: 256
   normalize_actions: true
   normalize_state: true
-  shuffle: false
+  shuffle: true
   episode_cache_size: 8

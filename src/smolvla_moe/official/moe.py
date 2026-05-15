@@ -39,7 +39,7 @@ class LowRankSwiGLUExpert(nn.Module):
         self.w12 = nn.Linear(hidden_dim, adapter_dim * 2, bias=False)
         self.w3 = nn.Linear(adapter_dim, hidden_dim, bias=False)
         nn.init.normal_(self.w12.weight, mean=0.0, std=0.02)
-        nn.init.normal_(self.w3.weight, mean=0.0, std=0.02)
+        nn.init.zeros_(self.w3.weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         gate, value = self.w12(x).chunk(2, dim=-1)
