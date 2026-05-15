@@ -39,7 +39,8 @@ torchrun --standalone --nproc_per_node=8 scripts/train_official_smolvla_moe.py \
 ```
 
 This run loads `HuggingFaceVLA/smolvla_libero` first, wraps official action-expert MLPs with residual top-1 MoE
-adapters, and freezes the official dense checkpoint by default.
+adapters, and freezes the official dense checkpoint by default. The official path reads LIBERO v2 parquet data
+directly and uses the released official normalization stats.
 
 Eval this branch with the official server script:
 

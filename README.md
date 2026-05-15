@@ -153,7 +153,7 @@ The first target dataset is LIBERO in LeRobot format:
 
 ```yaml
 dataset:
-  type: lerobot
+  type: libero_parquet
   repo_id: physical-intelligence/libero
   image_keys:
     - image
@@ -161,6 +161,8 @@ dataset:
   state_key: state
   action_key: actions
 ```
+
+The official SmolVLA-compatible path reads the LIBERO v2 parquet shards directly from the Hugging Face dataset and uses the released `HuggingFaceVLA/smolvla_libero` normalization stats, rather than `LeRobotDatasetMetadata`.
 
 On the remote training machine, use a persistent Hugging Face cache:
 
