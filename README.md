@@ -55,7 +55,8 @@ SmolVLA-MoE/
 │       └── official_smolvla_moe_libero_8gpu.yaml
 ├── docs/
 │   ├── assets/
-│   │   └── smolvla_moe_architecture.svg # README architecture figure
+│   │   ├── official_smolvla_architecture.svg
+│   │   └── smolvla_moe_architecture.svg
 │   ├── architecture.md                  # Design notes and required ablations
 │   └── vastai_runbook.md                # Remote training checklist
 ├── scripts/
@@ -92,6 +93,18 @@ pip install -e .
 ```
 
 ## Model Design
+
+### Official SmolVLA Baseline
+
+<p align="center">
+  <img src="docs/assets/official_smolvla_architecture.svg" alt="Official SmolVLA dense architecture" width="100%">
+</p>
+
+The figure above is a redrawn reference diagram of official SmolVLA, based on the Hugging Face / LeRobot description:
+multi-view RGB, robot state, and language are encoded by a SmolVLM2-based VLM, then a dense flow-matching action
+expert generates a continuous action chunk.
+
+### Residual-MoE Variant in This Branch
 
 <p align="center">
   <img src="docs/assets/smolvla_moe_architecture.svg" alt="Official SmolVLA residual-MoE architecture" width="100%">
