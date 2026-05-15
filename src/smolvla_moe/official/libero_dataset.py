@@ -141,7 +141,7 @@ def _episode_offsets(episodes: list[dict[str, Any]]) -> list[int]:
 def _image_to_chw(value: Any, image_size: int) -> torch.Tensor:
     if isinstance(value, dict):
         value = Image.open(BytesIO(value["bytes"])).convert("RGB")
-    array = np.asarray(value, dtype=np.uint8) if isinstance(value, Image.Image) else np.asarray(value)
+    array = np.array(value, dtype=np.uint8, copy=True) if isinstance(value, Image.Image) else np.array(value, copy=True)
     if array.ndim != 3:
         raise ValueError(f"image must be rank 3, got {array.shape}")
     tensor = torch.as_tensor(array)
