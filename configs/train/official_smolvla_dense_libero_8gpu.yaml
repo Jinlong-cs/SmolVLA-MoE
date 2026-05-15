@@ -1,0 +1,40 @@
+defaults:
+  - ../model/official_smolvla_dense_libero.yaml
+  - ../dataset/libero_official_smolvla.yaml
+
+seed: 7
+output_dir: outputs/libero/official_smolvla_dense_repro
+device: cuda
+
+train:
+  batch_size: 16
+  max_steps: 30000
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  grad_clip_norm: 1.0
+  log_every: 20
+  save_every: 5000
+  save_final_checkpoint: true
+  ddp_find_unused_parameters: false
+  amp_dtype: bfloat16
+  wandb:
+    enabled: true
+    workspace: null
+    project: smolvla-official-libero
+    name: official_smolvla_dense_repro_libero
+    group: official_smolvla_dense_repro_8gpu
+    mode: online
+    dir: null
+    tags:
+      - official-smolvla
+      - dense-baseline
+      - libero
+      - flow-matching
+      - full-finetune
+      - shuffled-data
+    notes: "Dense official HuggingFaceVLA/smolvla_libero continued training on LIBERO with the same direct LIBERO parquet reader and official checkpoint stats used by the SmolVLA-MoE branch."
+    resume: allow
+    id_file: wandb_id.txt
+    log_code: false
+    log_first_batch: false
+    log_checkpoints: false

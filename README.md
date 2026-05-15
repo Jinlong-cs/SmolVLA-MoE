@@ -21,11 +21,13 @@ This branch also contains the official-compatible path:
 
 ```text
 HuggingFaceVLA/smolvla_libero
+  dense official SmolVLA continued-training baseline
   + residual top-1 MoE adapters in official SmolVLA action-expert MLPs
 ```
 
 The official dense SmolVLA module is loaded first and left structurally intact. MoE is enabled only by the
-`scripts/train_official_smolvla_moe.py` entrypoint and its config.
+`scripts/train_official_smolvla_moe.py` entrypoint and its config. The dense official reproduction path uses
+`scripts/train_official_smolvla_dense.py`.
 
 ## Index
 
@@ -49,9 +51,11 @@ SmolVLA-MoE/
 │   │   └── libero.yaml                  # LIBERO / LeRobot data adapter config
 │   ├── model/
 │   │   ├── smolvla_moe_0p5b_active.yaml # SmolVLM2 + MoE action expert config
+│   │   ├── official_smolvla_dense_libero.yaml
 │   │   └── official_smolvla_moe_libero.yaml
 │   └── train/
 │       ├── libero_8gpu.yaml             # 8GPU LIBERO training config
+│       ├── official_smolvla_dense_libero_8gpu.yaml
 │       └── official_smolvla_moe_libero_8gpu.yaml
 ├── docs/
 │   ├── assets/
@@ -61,6 +65,7 @@ SmolVLA-MoE/
 │   └── vastai_runbook.md                # Remote training checklist
 ├── scripts/
 │   ├── train.py                         # Single-node / torchrun training entrypoint
+│   ├── train_official_smolvla_dense.py  # Official dense SmolVLA LIBERO reproduction
 │   ├── train_official_smolvla_moe.py    # Official SmolVLA + residual MoE entrypoint
 │   ├── print_model_size.py              # Parameter count utility
 │   ├── serve_libero_policy.py           # OpenPI-compatible policy server
@@ -208,7 +213,22 @@ torchrun --standalone --nproc_per_node=8 scripts/train.py \
   --config configs/train/libero_8gpu.yaml
 ```
 
-### 3) Official SmolVLA residual-MoE LIBERO training
+### 3) Official dense SmolVLA LIBERO reproduction
+
+```bash
+export HF_HOME=/workspace/.hf_home
+export HF_HUB_ENABLE_HF_TRANSFER=1
+export WANDB_API_KEY=...
+export WANDB_MODE=online
+
+torchrun --standalone --nproc_per_node=8 scripts/train_official_smolvla_dense.py \
+  --config configs/train/official_smolvla_dense_libero_8gpu.yaml
+```
+
+This path trains the released dense `HuggingFaceVLA/smolvla_libero` policy without MoE patches. Use it as the closest
+training-curve control for residual-MoE runs.
+
+### 4) Official SmolVLA residual-MoE LIBERO training
 
 ```bash
 export HF_HOME=/workspace/.hf_home
