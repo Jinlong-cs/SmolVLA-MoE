@@ -33,6 +33,28 @@ Shared SwiGLU expert, always active
 
 Chunk-level routing is the conservative default because it keeps all tokens in one action chunk on the same routed expert, which should reduce temporal inconsistency compared with per-action-token routing.
 
+## Official SmolVLA Residual-MoE Variant
+
+The official-compatible variant starts from `HuggingFaceVLA/smolvla_libero` and keeps the official SmolVLA policy,
+flow objective, state/action projections, KV-cache inference path, and action chunk semantics intact.
+
+The only structural change is inside the action expert MLPs:
+
+```text
+original action-expert MLP
+  -> original action-expert MLP + residual top-k MoE adapter
+```
+
+Default training freezes the official dense path and trains only:
+
+- MoE routers
+- low-rank SwiGLU residual experts
+- residual scale parameters
+
+This is intentionally more conservative than replacing the whole action expert with a sparse decoder. It lets the
+first official-based experiment answer whether sparse residual capacity can improve LIBERO while preserving the
+released dense SmolVLA behavior at initialization.
+
 ## Benchmark-Agnostic Constraints
 
 Do not hard-code:

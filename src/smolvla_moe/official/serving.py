@@ -9,14 +9,13 @@ import torch.nn.functional as F
 from lerobot.datasets import LeRobotDatasetMetadata
 
 from smolvla_moe.config import load_config
-from smolvla_moe.data.batch import VLABatch
-from smolvla_moe.data.collate import VLACollator
 from smolvla_moe.data.lerobot_dataset import _stats_tensors
-from smolvla_moe.models.policy import SmolVLAMoEPolicy
+from smolvla_moe.official.data import OfficialSmolVLACollator
+from smolvla_moe.official.policy import build_official_smolvla_moe_policy
 
 
-class LiberoSmolVLAMoEPolicy:
-    """OpenPI-compatible LIBERO policy wrapper for SmolVLA-MoE checkpoints."""
+class LiberoOfficialSmolVLAMoEPolicy:
+    """OpenPI-compatible server wrapper for official SmolVLA + residual MoE checkpoints."""
 
     def __init__(
         self,
@@ -39,12 +38,12 @@ class LiberoSmolVLAMoEPolicy:
         self.binarize_gripper = bool(binarize_gripper)
         self.clip_actions = bool(clip_actions)
 
-        self.policy = SmolVLAMoEPolicy(self.config).to(self.device)
+        self.policy = build_official_smolvla_moe_policy(self.config).to(self.device)
         missing, unexpected = self.policy.load_state_dict(payload["model"], strict=False)
         if missing or unexpected:
             raise RuntimeError(f"Checkpoint state mismatch. missing={missing} unexpected={unexpected}")
         self.policy.eval()
-        self.collator = VLACollator(self.config)
+        self.collator = OfficialSmolVLACollator(self.config)
 
         stats = _load_dataset_stats(self.dataset_config)
         self.state_mean, self.state_std = _stats_tensors(stats, str(self.dataset_config["state_key"]))
@@ -57,19 +56,20 @@ class LiberoSmolVLAMoEPolicy:
 
     @property
     def metadata(self) -> dict[str, Any]:
-        model_config = self.config["model"]
+        cfg = self.policy.policy.config
         return {
-            "policy": "smolvla-moe",
-            "horizon": int(model_config["action_decoder"]["horizon"]),
-            "action_dim": int(model_config["action_decoder"]["action_dim"]),
-            "flow_inference_steps": int(model_config.get("flow", {}).get("inference_steps", 4)),
+            "policy": "official-smolvla-moe",
+            "horizon": int(cfg.chunk_size),
+            "action_dim": self.action_dim,
+            "flow_inference_steps": int(cfg.num_steps),
+            "n_action_steps": int(cfg.n_action_steps),
         }
 
     @torch.no_grad()
     def infer(self, obs: dict[str, Any]) -> dict[str, Any]:
-        batch = self._obs_to_batch(obs).to(self.device)
+        batch = _move_batch(self._obs_to_batch(obs), self.device)
         with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.amp_dtype is not None):
-            actions = self.policy.predict_action(batch, generator=self.generator)
+            actions = self.policy.predict_action_chunk(batch)
         actions = actions[0].float().cpu()
         if self.normalize_actions:
             actions = _denormalize(actions, self.action_mean, self.action_std)
@@ -77,12 +77,14 @@ class LiberoSmolVLAMoEPolicy:
         return {"actions": _postprocess_libero_actions(actions_np, self.binarize_gripper, self.clip_actions)}
 
     def reset(self) -> None:
-        return None
+        self.policy.policy.reset()
 
-    def _obs_to_batch(self, obs: dict[str, Any]) -> VLABatch:
+    def _obs_to_batch(self, obs: dict[str, Any]) -> dict[str, torch.Tensor]:
         image = _hwc_to_chw_float(obs["observation/image"], self.image_size)
         wrist_image = _hwc_to_chw_float(obs["observation/wrist_image"], self.image_size)
-        state = torch.as_tensor(np.array(obs["observation/state"], dtype=np.float32, copy=True)).reshape(-1)[: self.state_dim]
+        state = torch.as_tensor(np.array(obs["observation/state"], dtype=np.float32, copy=True)).reshape(-1)[
+            : self.state_dim
+        ]
         if self.normalize_state:
             state = _normalize(state, self.state_mean, self.state_std)
         sample = {
@@ -93,6 +95,13 @@ class LiberoSmolVLAMoEPolicy:
             "language": str(obs.get("prompt", "")),
         }
         return self.collator([sample])
+
+
+def _move_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
+    moved: dict[str, Any] = {}
+    for key, value in batch.items():
+        moved[key] = value.to(device) if torch.is_tensor(value) else value
+    return moved
 
 
 def _load_dataset_stats(dataset_config: dict[str, Any]) -> dict[str, Any]:
@@ -142,3 +151,4 @@ def _amp_dtype(name: str | None) -> torch.dtype | None:
     if str(name) in {"float16", "fp16"}:
         return torch.float16
     raise ValueError(f"Unsupported amp dtype: {name}")
+

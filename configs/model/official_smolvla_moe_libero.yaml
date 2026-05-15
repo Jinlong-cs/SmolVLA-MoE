@@ -1,0 +1,24 @@
+official_smolvla:
+  checkpoint: HuggingFaceVLA/smolvla_libero
+  vlm_model_name: HuggingFaceTB/SmolVLM2-500M-Instruct
+  image_feature_keys:
+    - observation.images.image
+    - observation.images.image2
+  tokenizer_max_length: 48
+  pad_language_to: longest
+  freeze_official_dense: true
+  policy_overrides:
+    num_steps: 10
+    n_action_steps: 1
+
+model:
+  official_moe:
+    num_experts: 4
+    top_k: 1
+    adapter_dim: 256
+    init_scale: 0.0
+    load_balance_weight: 0.01
+    router_z_loss_weight: 0.0001
+    layer_start: 0
+    layer_stride: 1
+

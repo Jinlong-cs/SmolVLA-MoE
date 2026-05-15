@@ -7,11 +7,11 @@ name = "smolvla-moe"
 version = "0.1.0"
 description = "SmolVLA-MoE: compact flow-matching VLA with a sparse MoE action expert"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
   "accelerate>=1.0",
   "datasets>=3.0",
-  "lerobot>=0.1.0",
+  "lerobot[smolvla,libero,evaluation,training]>=0.5.1",
   "num2words>=0.5.14",
   "numpy>=1.26",
   "pillow>=10.0",

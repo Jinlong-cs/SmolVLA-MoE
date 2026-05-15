@@ -5,8 +5,8 @@ from typing import Any
 import numpy as np
 import torch
 import torch.nn.functional as F
-from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadata
+from lerobot.datasets import LeRobotDataset
+from lerobot.datasets import LeRobotDatasetMetadata
 from torch.utils.data import Dataset
 
 

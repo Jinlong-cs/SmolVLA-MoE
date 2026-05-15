@@ -1,0 +1,18 @@
+dataset:
+  name: libero
+  type: lerobot
+  repo_id: physical-intelligence/libero
+  local_path: null
+  image_keys:
+    - image
+    - wrist_image
+  state_key: state
+  action_key: actions
+  language_key: task
+  action_dim: 7
+  state_dim: 8
+  horizon: 50
+  image_size: 256
+  normalize_actions: true
+  normalize_state: true
+

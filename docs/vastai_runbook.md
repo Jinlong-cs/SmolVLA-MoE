@@ -8,10 +8,9 @@ This runbook is intentionally conservative. Fill actual machine paths, W&B URLs,
 cd /workspace
 git clone <repo-url> SmolVLA-MoE
 cd /workspace/SmolVLA-MoE
-python -m venv .venv
+uv venv --python 3.12 .venv
 source .venv/bin/activate
-pip install -U pip
-pip install -e .
+uv pip install -e .
 python -m compileall src scripts
 ```
 
@@ -25,6 +24,41 @@ export WANDB_MODE=online
 
 torchrun --standalone --nproc_per_node=8 scripts/train.py \
   --config configs/train/libero_8gpu.yaml
+```
+
+## Official SmolVLA Residual-MoE Training
+
+```bash
+export HF_HOME=/workspace/.hf_home
+export HF_HUB_ENABLE_HF_TRANSFER=1
+export WANDB_API_KEY=...
+export WANDB_MODE=online
+
+torchrun --standalone --nproc_per_node=8 scripts/train_official_smolvla_moe.py \
+  --config configs/train/official_smolvla_moe_libero_8gpu.yaml
+```
+
+This run loads `HuggingFaceVLA/smolvla_libero` first, wraps official action-expert MLPs with residual top-1 MoE
+adapters, and freezes the official dense checkpoint by default.
+
+Eval this branch with the official server script:
+
+```bash
+OPENPI_ROOT=/workspace/openpi \
+HF_HOME=/workspace/.hf_home \
+MUJOCO_GL=egl \
+PYOPENGL_PLATFORM=egl \
+PYTHONPATH=/workspace/SmolVLA-MoE/src:/workspace/openpi/src:/workspace/openpi/packages/openpi-client/src:/workspace/openpi/third_party/libero \
+/workspace/openpi/.venv/bin/python scripts/eval_libero.py \
+  --checkpoint outputs/libero/official_smolvla_moe_residual/checkpoints/final.pt \
+  --config configs/train/official_smolvla_moe_libero_8gpu.yaml \
+  --server-script scripts/serve_official_smolvla_moe_policy.py \
+  --suite all \
+  --num-trials 50 \
+  --replan-steps 1 \
+  --output-dir outputs/libero/eval/official_smolvla_moe_residual_final \
+  --server-python /workspace/openpi/.venv/bin/python \
+  --libero-python /workspace/openpi/examples/libero/.venv/bin/python
 ```
 
 The default W&B run is configured as:

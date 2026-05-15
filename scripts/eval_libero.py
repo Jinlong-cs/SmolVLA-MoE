@@ -40,6 +40,7 @@ def main() -> int:
     parser.add_argument("--no-binarize-gripper", action="store_true")
     parser.add_argument("--no-clip-actions", action="store_true")
     parser.add_argument("--server-log", default=None)
+    parser.add_argument("--server-script", default="scripts/serve_libero_policy.py")
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[1]
@@ -109,7 +110,7 @@ def _start_server(args: argparse.Namespace, root: Path, server_log: Path) -> sub
     log_file = server_log.open("w", encoding="utf-8")
     cmd = [
         args.server_python,
-        str(root / "scripts/serve_libero_policy.py"),
+        str(root / args.server_script),
         f"--checkpoint={args.checkpoint}",
         f"--config={args.config}",
         f"--host=0.0.0.0",

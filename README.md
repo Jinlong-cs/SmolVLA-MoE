@@ -3,7 +3,7 @@
 Research codebase for **SmolVLA-MoE: a compact flow-matching VLA with a sparse MoE action expert**.
 
 [![GitHub](https://img.shields.io/badge/GitHub-SmolVLA--MoE-111111.svg)](https://github.com/Jinlong-cs/SmolVLA-MoE)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.3%2B-ee4c2c.svg)](https://pytorch.org/)
 [![Weights & Biases](https://img.shields.io/badge/W%26B-logging-ffbe00.svg)](https://wandb.ai/)
 
@@ -16,6 +16,16 @@ SmolVLA-MoE is designed around:
 - a shared + routed sparse MoE FFN inside the action expert,
 - top-1 chunk-level routing for efficient inference,
 - W&B and local JSONL observability for reproducible benchmark runs.
+
+This branch also contains the official-compatible path:
+
+```text
+HuggingFaceVLA/smolvla_libero
+  + residual top-1 MoE adapters in official SmolVLA action-expert MLPs
+```
+
+The official dense SmolVLA module is loaded first and left structurally intact. MoE is enabled only by the
+`scripts/train_official_smolvla_moe.py` entrypoint and its config.
 
 ## Index
 
@@ -38,9 +48,11 @@ SmolVLA-MoE/
 │   ├── dataset/
 │   │   └── libero.yaml                  # LIBERO / LeRobot data adapter config
 │   ├── model/
-│   │   └── smolvla_moe_0p5b_active.yaml # SmolVLM2 + MoE action expert config
+│   │   ├── smolvla_moe_0p5b_active.yaml # SmolVLM2 + MoE action expert config
+│   │   └── official_smolvla_moe_libero.yaml
 │   └── train/
-│       └── libero_8gpu.yaml             # 8GPU LIBERO training config
+│       ├── libero_8gpu.yaml             # 8GPU LIBERO training config
+│       └── official_smolvla_moe_libero_8gpu.yaml
 ├── docs/
 │   ├── assets/
 │   │   └── smolvla_moe_architecture.svg # README architecture figure
@@ -48,12 +60,15 @@ SmolVLA-MoE/
 │   └── vastai_runbook.md                # Remote training checklist
 ├── scripts/
 │   ├── train.py                         # Single-node / torchrun training entrypoint
+│   ├── train_official_smolvla_moe.py    # Official SmolVLA + residual MoE entrypoint
 │   ├── print_model_size.py              # Parameter count utility
 │   ├── serve_libero_policy.py           # OpenPI-compatible policy server
+│   ├── serve_official_smolvla_moe_policy.py
 │   └── eval_libero.py                   # LIBERO closed-loop eval wrapper
 ├── src/smolvla_moe/
 │   ├── data/                            # LeRobot/LIBERO data adapter
 │   ├── models/                          # Backbone, flow matching, MoE, policy
+│   ├── official/                        # Official SmolVLA residual-MoE adapter path
 │   ├── training/                        # Trainer and observability
 │   └── utils/
 ├── outputs/                             # Training outputs, ignored by git
@@ -65,7 +80,7 @@ SmolVLA-MoE/
 Create an environment and install the package:
 
 ```bash
-conda create -n smolvla-moe python=3.10 -y
+conda create -n smolvla-moe python=3.12 -y
 conda activate smolvla-moe
 pip install -U pip
 
@@ -119,6 +134,19 @@ The default MoE design is:
 
 Chunk-level routing is the conservative default because one action chunk shares the same routed expert, which should reduce temporal inconsistency compared with token-level routing.
 
+### Official-Compatible MoE Path
+
+The official-compatible path does not replace the official SmolVLA flow model. It loads
+`HuggingFaceVLA/smolvla_libero`, then wraps each official action-expert MLP as:
+
+```text
+official dense MLP(x) + residual_scale * top-1 MoE adapter(x)
+```
+
+Default behavior freezes the official dense checkpoint and trains only the residual MoE routers, experts, and
+scales. With `init_scale: 0.0`, the initial policy output is the official dense SmolVLA output, which protects the
+released checkpoint behavior before adaptation.
+
 ## Dataset Preparation
 
 The first target dataset is LIBERO in LeRobot format:
@@ -163,6 +191,21 @@ export WANDB_MODE=online
 torchrun --standalone --nproc_per_node=8 scripts/train.py \
   --config configs/train/libero_8gpu.yaml
 ```
+
+### 3) Official SmolVLA residual-MoE LIBERO training
+
+```bash
+export HF_HOME=/workspace/.hf_home
+export HF_HUB_ENABLE_HF_TRANSFER=1
+export WANDB_API_KEY=...
+export WANDB_MODE=online
+
+torchrun --standalone --nproc_per_node=8 scripts/train_official_smolvla_moe.py \
+  --config configs/train/official_smolvla_moe_libero_8gpu.yaml
+```
+
+This path starts from `HuggingFaceVLA/smolvla_libero`, uses the official SmolVLA flow/action expert, and only adds
+residual top-1 MoE adapters to the official action-expert MLPs.
 
 The default run writes outputs to:
 
@@ -222,6 +265,20 @@ python scripts/eval_libero.py \
   --suite all \
   --num-trials 50 \
   --output-dir outputs/libero/eval/final
+```
+
+For the official-compatible residual-MoE checkpoint, select the official server script and use `--replan-steps=1` to
+match official SmolVLA's LIBERO `n_action_steps=1` behavior:
+
+```bash
+python scripts/eval_libero.py \
+  --checkpoint outputs/libero/official_smolvla_moe_residual/checkpoints/final.pt \
+  --config configs/train/official_smolvla_moe_libero_8gpu.yaml \
+  --server-script scripts/serve_official_smolvla_moe_policy.py \
+  --suite all \
+  --num-trials 50 \
+  --replan-steps 1 \
+  --output-dir outputs/libero/eval/official_smolvla_moe_residual_final
 ```
 
 By default, evaluation saves rollout videos through the OpenPI LIBERO runner:
