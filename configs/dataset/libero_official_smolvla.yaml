@@ -1,7 +1,8 @@
 dataset:
   name: libero
-  type: lerobot
+  type: libero_parquet
   repo_id: physical-intelligence/libero
+  revision: null
   local_path: null
   image_keys:
     - image
@@ -15,4 +16,5 @@ dataset:
   image_size: 256
   normalize_actions: true
   normalize_state: true
-
+  shuffle: false
+  episode_cache_size: 8

@@ -6,12 +6,14 @@ from typing import Any
 import numpy as np
 import torch
 import torch.nn.functional as F
-from lerobot.datasets import LeRobotDatasetMetadata
+from lerobot.utils.constants import ACTION
+from lerobot.utils.constants import OBS_STATE
 
 from smolvla_moe.config import load_config
-from smolvla_moe.data.lerobot_dataset import _stats_tensors
 from smolvla_moe.official.data import OfficialSmolVLACollator
 from smolvla_moe.official.policy import build_official_smolvla_moe_policy
+from smolvla_moe.official.stats import load_official_smolvla_stats
+from smolvla_moe.official.stats import official_stats_tensors
 
 
 class LiberoOfficialSmolVLAMoEPolicy:
@@ -45,9 +47,9 @@ class LiberoOfficialSmolVLAMoEPolicy:
         self.policy.eval()
         self.collator = OfficialSmolVLACollator(self.config)
 
-        stats = _load_dataset_stats(self.dataset_config)
-        self.state_mean, self.state_std = _stats_tensors(stats, str(self.dataset_config["state_key"]))
-        self.action_mean, self.action_std = _stats_tensors(stats, str(self.dataset_config["action_key"]))
+        stats = official_stats_tensors(load_official_smolvla_stats(self.config))
+        self.state_mean, self.state_std = stats[OBS_STATE]
+        self.action_mean, self.action_std = stats[ACTION]
         self.normalize_state = bool(self.dataset_config.get("normalize_state", True))
         self.normalize_actions = bool(self.dataset_config.get("normalize_actions", True))
         self.image_size = int(self.dataset_config.get("image_size", 256))
@@ -104,13 +106,6 @@ def _move_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
     return moved
 
 
-def _load_dataset_stats(dataset_config: dict[str, Any]) -> dict[str, Any]:
-    repo_id = str(dataset_config["repo_id"])
-    root = dataset_config.get("local_path")
-    metadata = LeRobotDatasetMetadata(repo_id, root=root)
-    return getattr(metadata, "stats", {})
-
-
 def _hwc_to_chw_float(image: Any, image_size: int) -> torch.Tensor:
     array = np.array(image, copy=True)
     if array.ndim != 3:
@@ -151,4 +146,3 @@ def _amp_dtype(name: str | None) -> torch.dtype | None:
     if str(name) in {"float16", "fp16"}:
         return torch.float16
     raise ValueError(f"Unsupported amp dtype: {name}")
-

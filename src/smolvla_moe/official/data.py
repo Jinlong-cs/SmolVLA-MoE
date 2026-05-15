@@ -12,7 +12,8 @@ from lerobot.utils.constants import OBS_LANGUAGE_ATTENTION_MASK
 from lerobot.utils.constants import OBS_LANGUAGE_TOKENS
 from lerobot.utils.constants import OBS_STATE
 
-from smolvla_moe.data.lerobot_dataset import LeRobotVLADataset
+from smolvla_moe.official.libero_dataset import LiberoParquetVLADataset
+from smolvla_moe.official.stats import load_official_smolvla_stats
 
 
 class OfficialSmolVLACollator:
@@ -56,15 +57,18 @@ class OfficialSmolVLACollator:
 
 def build_official_train_data(config: dict[str, Any], rank: int = 0, world_size: int = 1) -> Any:
     dataset_config = config["dataset"]
-    dataset_type = str(dataset_config.get("type", "lerobot"))
-    if dataset_type != "lerobot":
+    dataset_type = str(dataset_config.get("type", "libero_parquet"))
+    if dataset_type != "libero_parquet":
         raise ValueError(f"Unsupported dataset type: {dataset_type}")
-    dataset = LeRobotVLADataset(dataset_config)
-    sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True) if world_size > 1 else None
+    dataset = LiberoParquetVLADataset(dataset_config, stats=load_official_smolvla_stats(config))
+    shuffle = bool(dataset_config.get("shuffle", False))
+    sampler = (
+        DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=shuffle) if world_size > 1 else None
+    )
     loader = DataLoader(
         dataset,
         batch_size=int(config.get("train", {}).get("batch_size", 1)),
-        shuffle=sampler is None,
+        shuffle=sampler is None and shuffle,
         sampler=sampler,
         num_workers=int(dataset_config.get("num_workers", 4)),
         pin_memory=True,
