@@ -3,7 +3,7 @@ defaults:
   - ../dataset/libero_official_smolvla.yaml
 
 seed: 7
-output_dir: outputs/libero/official_smolvla_dense_repro
+output_dir: outputs/libero/official_smolvla_dense_base_init_repro
 device: cuda
 
 train:
@@ -21,8 +21,8 @@ train:
     enabled: true
     workspace: null
     project: smolvla-official-libero
-    name: official_smolvla_dense_repro_libero
-    group: official_smolvla_dense_repro_8gpu
+    name: official_smolvla_dense_base_init_repro_libero
+    group: official_smolvla_dense_base_init_repro_8gpu
     mode: online
     dir: null
     tags:
@@ -32,7 +32,8 @@ train:
       - flow-matching
       - full-finetune
       - shuffled-data
-    notes: "Dense official HuggingFaceVLA/smolvla_libero continued training on LIBERO with the same direct LIBERO parquet reader and official checkpoint stats used by the SmolVLA-MoE branch."
+      - base-init
+    notes: "Dense official SmolVLA LIBERO reproduction: initialize LIBERO-shaped SmolVLA from lerobot/smolvla_base with non-strict matching weights, use LIBERO dataset stats, then train on physical-intelligence/libero. This is not continued finetuning from HuggingFaceVLA/smolvla_libero."
     resume: allow
     id_file: wandb_id.txt
     log_code: false

@@ -1,6 +1,10 @@
 official_smolvla:
-  checkpoint: HuggingFaceVLA/smolvla_libero
+  checkpoint: lerobot/smolvla_base
+  checkpoint_strict: false
+  override_checkpoint_config: true
+  stats_source: dataset
   vlm_model_name: HuggingFaceTB/SmolVLM2-500M-Instruct
+  load_vlm_weights: true
   image_feature_keys:
     - observation.images.image
     - observation.images.image2

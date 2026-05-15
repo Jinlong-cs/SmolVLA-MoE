@@ -20,8 +20,10 @@ SmolVLA-MoE is designed around:
 This branch also contains the official-compatible path:
 
 ```text
+lerobot/smolvla_base
+  dense official SmolVLA base-initialized LIBERO reproduction
 HuggingFaceVLA/smolvla_libero
-  dense official SmolVLA continued-training baseline
+  released official LIBERO checkpoint for native eval and comparison
   + residual top-1 MoE adapters in official SmolVLA action-expert MLPs
 ```
 
@@ -115,9 +117,11 @@ expert generates a continuous action chunk.
   <img src="docs/assets/smolvla_moe_architecture.svg" alt="Official SmolVLA residual-MoE architecture" width="100%">
 </p>
 
-This branch's production path is the official-compatible residual-MoE variant. It loads the released
-`HuggingFaceVLA/smolvla_libero` policy, preserves the official dense SmolVLA flow model, and patches only the
-official action-expert MLPs:
+This branch has two official-compatible paths:
+
+- Dense baseline reproduction: initialize a LIBERO-shaped SmolVLA from `lerobot/smolvla_base` with non-strict
+  matching weights, use LIBERO dataset stats, and train on `physical-intelligence/libero`.
+- Residual-MoE variant: start from a dense official SmolVLA policy and patch only the official action-expert MLPs.
 
 ```text
 LIBERO images + language + state
@@ -157,8 +161,8 @@ behavior still matches the released dense official policy while the residual ada
 
 ### Official-Compatible MoE Path
 
-The official-compatible path does not replace the official SmolVLA flow model. It loads
-`HuggingFaceVLA/smolvla_libero`, then wraps each official action-expert MLP as:
+The official-compatible MoE path does not replace the official SmolVLA flow model. It wraps each official
+action-expert MLP as:
 
 ```text
 official dense MLP(x) + residual_scale * top-1 MoE adapter(x)
@@ -225,8 +229,10 @@ torchrun --standalone --nproc_per_node=8 scripts/train_official_smolvla_dense.py
   --config configs/train/official_smolvla_dense_libero_8gpu.yaml
 ```
 
-This path trains the released dense `HuggingFaceVLA/smolvla_libero` policy without MoE patches. Use it as the closest
-training-curve control for residual-MoE runs.
+This path initializes the LIBERO-shaped dense policy from `lerobot/smolvla_base` with non-strict matching weights and
+uses `physical-intelligence/libero` dataset stats. It is the intended dense training reproduction path. Do not report a
+run initialized from `HuggingFaceVLA/smolvla_libero` as a from-base reproduction; that is continued finetuning of the
+released LIBERO checkpoint.
 
 ### 4) Official SmolVLA residual-MoE LIBERO training
 
@@ -336,6 +342,22 @@ LIBERO-Spatial, LIBERO-Object, LIBERO-Goal, LIBERO-10
 40 tasks x 50 trials
 suite-level success and overall success
 ```
+
+For official SmolVLA alignment, prefer the LeRobot-native evaluator before using the OpenPI wrapper:
+
+```bash
+python scripts/eval_official_smolvla_lerobot.py \
+  --policy-path HuggingFaceVLA/smolvla_libero \
+  --output-dir outputs/libero/hf_smolvla_libero_lerobot_eval_10trials \
+  --n-episodes 10 \
+  --num-gpus 8 \
+  --launch \
+  --no-video
+```
+
+This runs 8 task shards and writes `summary.json` with suite, overall, and per-task success rates. Use the same command
+with a local `Policy.save_pretrained` directory to evaluate reproduced dense checkpoints through the official LeRobot
+pre/postprocessor path.
 
 ## Development Status
 
