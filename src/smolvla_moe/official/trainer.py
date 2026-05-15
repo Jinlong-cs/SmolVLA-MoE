@@ -20,11 +20,12 @@ from smolvla_moe.utils.seed import set_seed
 
 
 def train_official_smolvla_moe(config: dict[str, Any], max_steps_override: int | None = None) -> None:
-    set_seed(int(config.get("seed", 7)))
-    ddp = _maybe_init_distributed()
+    ddp = _distributed_env()
     rank = ddp["rank"]
     world_size = ddp["world_size"]
     device = _resolve_device(config, ddp["local_rank"])
+    set_seed(int(config.get("seed", 7)))
+    _maybe_init_distributed(world_size, device)
 
     model = build_official_smolvla_moe_policy(config).to(device)
     total_params = count_parameters(model)
@@ -151,14 +152,17 @@ def _set_sampler_epoch(data: Any, step: int) -> None:
         sampler.set_epoch(step)
 
 
-def _maybe_init_distributed() -> dict[str, int]:
+def _distributed_env() -> dict[str, int]:
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     rank = int(os.environ.get("RANK", "0"))
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-    if world_size > 1 and not torch.distributed.is_initialized():
-        backend = "nccl" if torch.cuda.is_available() else "gloo"
-        torch.distributed.init_process_group(backend=backend)
     return {"world_size": world_size, "rank": rank, "local_rank": local_rank}
+
+
+def _maybe_init_distributed(world_size: int, device: torch.device) -> None:
+    if world_size > 1 and not torch.distributed.is_initialized():
+        backend = "nccl" if device.type == "cuda" else "gloo"
+        torch.distributed.init_process_group(backend=backend)
 
 
 def _cleanup_distributed(world_size: int) -> None:
@@ -238,4 +242,3 @@ def _grad_norm(parameters: Any, device: torch.device) -> torch.Tensor:
     if not norms:
         return torch.zeros((), device=device)
     return torch.stack(norms).norm(2)
-
