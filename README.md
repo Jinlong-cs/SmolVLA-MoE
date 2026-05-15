@@ -94,45 +94,47 @@ pip install -e .
 ## Model Design
 
 <p align="center">
-  <img src="docs/assets/smolvla_moe_architecture.svg" alt="SmolVLA-MoE architecture" width="100%">
+  <img src="docs/assets/smolvla_moe_architecture.svg" alt="Official SmolVLA residual-MoE architecture" width="100%">
 </p>
 
-The intended production model uses a SmolVLM2-family backbone and a flow-matching MoE action expert:
+This branch's production path is the official-compatible residual-MoE variant. It loads the released
+`HuggingFaceVLA/smolvla_libero` policy, preserves the official dense SmolVLA flow model, and patches only the
+official action-expert MLPs:
 
 ```text
-RGB cameras + language + proprio
+LIBERO images + language + state
         |
         v
-Dense VLM backbone
+official SmolVLA preprocessor + checkpoint stats
         |
         v
-context tokens
+official SmolVLA VLM + action expert
         |
         v
-Flow-matching action decoder
-  - action self-attention
-  - cross-attention to VLM context
-  - shared SwiGLU expert
-  - top-1 routed SwiGLU expert
+each official action-expert MLP becomes:
+  frozen official dense MLP(x)
+  + trainable residual_scale * top-1 MoE adapter(x)
         |
         v
-continuous action chunk
+continuous action chunk, H=50, A=7
 ```
 
-Flow matching defines the continuous action generation objective. MoE defines how the action decoder allocates parameters and compute. They are complementary:
+Flow matching remains the official SmolVLA action generation objective. MoE only adds sparse residual capacity inside
+the official action expert:
 
 ```text
 Flow matching: how to generate action chunks.
 MoE: which action-decoder expert capacity to use.
 ```
 
-The default MoE design is:
+The official branch default MoE adapter is:
 
 ```text
-1 shared expert + 4 routed experts + top-1 chunk-level routing
+4 low-rank routed experts + top-1 chunk-level routing + trainable residual scale
 ```
 
-Chunk-level routing is the conservative default because one action chunk shares the same routed expert, which should reduce temporal inconsistency compared with token-level routing.
+By default, the official dense checkpoint is frozen and only the residual MoE routers, low-rank experts, and residual
+scales are trainable. With `init_scale: 0.0`, step-0 behavior matches the released dense official policy.
 
 ### Official-Compatible MoE Path
 
@@ -143,9 +145,7 @@ The official-compatible path does not replace the official SmolVLA flow model. I
 official dense MLP(x) + residual_scale * top-1 MoE adapter(x)
 ```
 
-Default behavior freezes the official dense checkpoint and trains only the residual MoE routers, experts, and
-scales. With `init_scale: 0.0`, the initial policy output is the official dense SmolVLA output, which protects the
-released checkpoint behavior before adaptation.
+Default behavior freezes the official dense checkpoint and trains only the residual MoE routers, experts, and scales.
 
 ## Dataset Preparation
 
