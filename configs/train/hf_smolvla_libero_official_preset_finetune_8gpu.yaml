@@ -39,10 +39,10 @@ train:
       - dense-baseline
       - libero
       - flow-matching
-      - full-finetune
+      - expert-finetune
       - released-checkpoint-finetune
       - official-optimizer-preset
-    notes: "Continued finetune from HuggingFaceVLA/smolvla_libero using SmolVLA official optimizer/scheduler preset. This is not a from-base reproduction."
+    notes: "Continued finetune from HuggingFaceVLA/smolvla_libero using SmolVLA official optimizer/scheduler preset. The released checkpoint keeps the official SmolVLA trainable-parameter policy, so this is expert/action-side finetuning, not full-backbone finetuning and not a from-base reproduction."
     resume: allow
     id_file: wandb_id.txt
     log_code: false
