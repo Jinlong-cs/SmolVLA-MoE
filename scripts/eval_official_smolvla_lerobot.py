@@ -23,6 +23,9 @@ SUITE_SHARDS = (
     ("libero_10", [5, 6, 7, 8, 9], "libero10_5_9"),
 )
 
+SUITES = ("libero_spatial", "libero_object", "libero_goal", "libero_10")
+TASK_JOBS = tuple((suite, task_id, f"{suite}_task_{task_id:02d}") for suite in SUITES for task_id in range(10))
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run and aggregate LeRobot-native LIBERO eval for SmolVLA.")
@@ -37,13 +40,17 @@ def main() -> int:
     parser.add_argument("--use-async-envs", default="false", choices=["true", "false"])
     parser.add_argument("--num-gpus", type=int, default=8)
     parser.add_argument("--launch", action="store_true", help="Run all shards before aggregating.")
+    parser.add_argument("--dynamic-tasks", action="store_true", help="Run one LIBERO task per process with dynamic GPU scheduling.")
     parser.add_argument("--no-video", action="store_true", help="Disable env video writing when supported.")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     if args.launch:
-        _launch_shards(args, output_dir)
+        if args.dynamic_tasks:
+            _launch_dynamic_tasks(args, output_dir)
+        else:
+            _launch_shards(args, output_dir)
     summary = aggregate(output_dir)
     summary["policy_path"] = args.policy_path
     summary["protocol"] = {
@@ -59,36 +66,79 @@ def main() -> int:
     return 0
 
 
+def _launch_dynamic_tasks(args: argparse.Namespace, output_dir: Path) -> None:
+    logs_dir = output_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    pending = list(TASK_JOBS)
+    running: list[tuple[int, str, subprocess.Popen[Any], Any]] = []
+    failed: list[tuple[str, int]] = []
+    max_workers = args.num_gpus if args.num_gpus > 0 else 1
+    available_gpus = list(range(max_workers))
+
+    try:
+        while pending or running:
+            while pending and available_gpus:
+                suite, task_id, task_name = pending.pop(0)
+                gpu_id = available_gpus.pop(0)
+                process, log_file = _start_eval_process(
+                    args=args,
+                    output_dir=output_dir,
+                    logs_dir=logs_dir,
+                    suite=suite,
+                    task_ids=[task_id],
+                    shard_name=task_name,
+                    gpu_id=gpu_id,
+                )
+                running.append((gpu_id, task_name, process, log_file))
+                print(f"started {task_name} on gpu {gpu_id}", flush=True)
+
+            still_running = []
+            for gpu_id, task_name, process, log_file in running:
+                return_code = process.poll()
+                if return_code is None:
+                    still_running.append((gpu_id, task_name, process, log_file))
+                else:
+                    log_file.close()
+                    available_gpus.append(gpu_id)
+                    if return_code != 0:
+                        failed.append((task_name, return_code))
+                        print(f"failed {task_name} on gpu {gpu_id} exit={return_code}", flush=True)
+                    else:
+                        print(f"finished {task_name} on gpu {gpu_id}", flush=True)
+
+            if failed:
+                for _, _, process, log_file in still_running:
+                    process.terminate()
+                    log_file.close()
+                break
+            running = still_running
+            if pending or running:
+                time.sleep(5)
+    finally:
+        for _, _, process, log_file in running:
+            if process.poll() is None:
+                process.terminate()
+            log_file.close()
+
+    if failed:
+        details = ", ".join(f"{name} exited {code}" for name, code in failed)
+        raise RuntimeError(f"LeRobot eval task failed: {details}. See logs in {logs_dir}")
+
+
 def _launch_shards(args: argparse.Namespace, output_dir: Path) -> None:
     processes: list[tuple[str, subprocess.Popen[Any], Any]] = []
     logs_dir = output_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     for index, (suite, task_ids, shard_name) in enumerate(SUITE_SHARDS):
-        shard_dir = output_dir / shard_name
-        shard_dir.mkdir(parents=True, exist_ok=True)
-        env = os.environ.copy()
-        env.setdefault("MUJOCO_GL", "egl")
-        env.setdefault("PYOPENGL_PLATFORM", "egl")
-        if args.num_gpus > 0:
-            env["CUDA_VISIBLE_DEVICES"] = str(index % args.num_gpus)
-        cmd = [
-            args.lerobot_eval,
-            f"--policy.path={args.policy_path}",
-            "--env.type=libero",
-            f"--env.task={suite}",
-            f"--env.task_ids={json.dumps(task_ids)}",
-            f"--env.max_parallel_tasks={args.max_parallel_tasks}",
-            f"--eval.batch_size={args.batch_size}",
-            f"--eval.n_episodes={args.n_episodes}",
-            f"--eval.use_async_envs={args.use_async_envs}",
-            f"--policy.device={args.device_prefix}",
-            f"--policy.use_amp={args.use_amp}",
-            f"--output_dir={shard_dir}",
-        ]
-        if args.no_video:
-            cmd.append("--env.video=false")
-        log_file = (logs_dir / f"{shard_name}.log").open("w", encoding="utf-8")
-        process = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, env=env)
+        process, log_file = _start_eval_process(
+            args=args,
+            output_dir=output_dir,
+            logs_dir=logs_dir,
+            suite=suite,
+            task_ids=task_ids,
+            shard_name=shard_name,
+            gpu_id=index % args.num_gpus if args.num_gpus > 0 else 0,
+        )
         processes.append((shard_name, process, log_file))
 
     failed: list[tuple[str, int]] = []
@@ -119,10 +169,47 @@ def _launch_shards(args: argparse.Namespace, output_dir: Path) -> None:
         raise RuntimeError(f"LeRobot eval shard failed: {details}. See logs in {logs_dir}")
 
 
+def _start_eval_process(
+    args: argparse.Namespace,
+    output_dir: Path,
+    logs_dir: Path,
+    suite: str,
+    task_ids: list[int],
+    shard_name: str,
+    gpu_id: int,
+) -> tuple[subprocess.Popen[Any], Any]:
+    shard_dir = output_dir / shard_name
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env.setdefault("MUJOCO_GL", "egl")
+    env.setdefault("PYOPENGL_PLATFORM", "egl")
+    if args.num_gpus > 0:
+        env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    cmd = [
+        args.lerobot_eval,
+        f"--policy.path={args.policy_path}",
+        "--env.type=libero",
+        f"--env.task={suite}",
+        f"--env.task_ids={json.dumps(task_ids)}",
+        f"--env.max_parallel_tasks={args.max_parallel_tasks}",
+        f"--eval.batch_size={args.batch_size}",
+        f"--eval.n_episodes={args.n_episodes}",
+        f"--eval.use_async_envs={args.use_async_envs}",
+        f"--policy.device={args.device_prefix}",
+        f"--policy.use_amp={args.use_amp}",
+        f"--output_dir={shard_dir}",
+    ]
+    if args.no_video:
+        cmd.append("--env.video=false")
+    log_file = (logs_dir / f"{shard_name}.log").open("w", encoding="utf-8")
+    process = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, env=env)
+    return process, log_file
+
+
 def aggregate(output_dir: Path) -> dict[str, Any]:
     eval_paths = sorted(output_dir.glob("*/eval_info.json"))
-    if len(eval_paths) != len(SUITE_SHARDS):
-        raise RuntimeError(f"Expected {len(SUITE_SHARDS)} eval_info.json files under {output_dir}, found {len(eval_paths)}")
+    if len(eval_paths) not in (len(SUITE_SHARDS), len(TASK_JOBS)):
+        raise RuntimeError(f"Expected 8 shard or 40 task eval_info.json files under {output_dir}, found {len(eval_paths)}")
 
     by_suite: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     per_task = []
