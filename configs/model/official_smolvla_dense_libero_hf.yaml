@@ -1,0 +1,15 @@
+official_smolvla:
+  checkpoint: HuggingFaceVLA/smolvla_libero
+  checkpoint_strict: false
+  override_checkpoint_config: false
+  stats_source: checkpoint
+  vlm_model_name: HuggingFaceTB/SmolVLM2-500M-Video-Instruct
+  image_feature_keys:
+    - observation.images.image
+    - observation.images.image2
+  tokenizer_max_length: 48
+  pad_language_to: longest
+  freeze_backbone: false
+  policy_overrides:
+    num_steps: 10
+    n_action_steps: 1

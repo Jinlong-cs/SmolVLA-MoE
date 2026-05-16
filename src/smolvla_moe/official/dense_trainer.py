@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 import time
 from typing import Any
 
 import torch
+from torch.optim.lr_scheduler import LambdaLR
 from torch.nn.parallel import DistributedDataParallel
 
 from smolvla_moe.official.data import build_official_train_data
@@ -42,11 +44,15 @@ def train_official_dense_smolvla(config: dict[str, Any], max_steps_override: int
 
     train_config = config.get("train", {})
     max_steps = int(max_steps_override or train_config.get("max_steps", 1000))
+    learning_rate = float(train_config.get("learning_rate", 1e-4))
     optimizer = torch.optim.AdamW(
         (p for p in model.parameters() if p.requires_grad),
-        lr=float(train_config.get("learning_rate", 1e-4)),
-        weight_decay=float(train_config.get("weight_decay", 0.01)),
+        lr=learning_rate,
+        betas=tuple(float(value) for value in train_config.get("betas", (0.9, 0.95))),
+        eps=float(train_config.get("eps", 1e-8)),
+        weight_decay=float(train_config.get("weight_decay", 1e-10)),
     )
+    scheduler = _build_lr_scheduler(optimizer, train_config, max_steps, learning_rate)
     amp_dtype = _amp_dtype(train_config.get("amp_dtype"))
     use_amp = device.type == "cuda" and amp_dtype is not None
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp and amp_dtype == torch.float16)
@@ -95,6 +101,8 @@ def train_official_dense_smolvla(config: dict[str, Any], max_steps_override: int
             grad_norm = _grad_norm(model.parameters(), device)
         scaler.step(optimizer)
         scaler.update()
+        if scheduler is not None:
+            scheduler.step()
 
         should_log = step == 1 or (log_every > 0 and step % log_every == 0)
         if should_log:
@@ -228,6 +236,70 @@ def _format_metrics(step: int, max_steps: int, metrics: dict[str, float]) -> str
     keys = ["train/loss", "train/flow_loss", "train/grad_norm", "train/lr"]
     summary = " ".join(f"{key}={metrics[key]:.5f}" for key in keys if key in metrics)
     return f"step={step}/{max_steps} {summary}"
+
+
+def _build_lr_scheduler(
+    optimizer: torch.optim.Optimizer,
+    train_config: dict[str, Any],
+    max_steps: int,
+    peak_lr: float,
+) -> LambdaLR | None:
+    scheduler_config = train_config.get("scheduler")
+    if scheduler_config is None:
+        return None
+    scheduler_type = str(scheduler_config.get("type", "cosine_decay_with_warmup"))
+    if scheduler_type != "cosine_decay_with_warmup":
+        raise ValueError(f"Unsupported scheduler type: {scheduler_type}")
+    warmup_steps = int(scheduler_config.get("warmup_steps", 1000))
+    decay_steps = int(scheduler_config.get("decay_steps", max_steps))
+    decay_lr = float(scheduler_config.get("decay_lr", 2.5e-6))
+    return LambdaLR(
+        optimizer,
+        _cosine_decay_with_warmup_lambda(
+            warmup_steps=warmup_steps,
+            decay_steps=decay_steps,
+            peak_lr=peak_lr,
+            decay_lr=decay_lr,
+            max_steps=max_steps,
+        ),
+        last_epoch=-1,
+    )
+
+
+def _cosine_decay_with_warmup_lambda(
+    warmup_steps: int,
+    decay_steps: int,
+    peak_lr: float,
+    decay_lr: float,
+    max_steps: int,
+) -> Any:
+    if warmup_steps <= 0:
+        raise ValueError("warmup_steps must be positive")
+    if decay_steps <= 0:
+        raise ValueError("decay_steps must be positive")
+    if peak_lr <= 0:
+        raise ValueError("peak_lr must be positive")
+
+    actual_warmup_steps = warmup_steps
+    actual_decay_steps = decay_steps
+    if max_steps < decay_steps:
+        scale_factor = max_steps / decay_steps
+        actual_warmup_steps = max(1, int(warmup_steps * scale_factor))
+        actual_decay_steps = max_steps
+
+    def lr_lambda(current_step: int) -> float:
+        if current_step < actual_warmup_steps:
+            if current_step <= 0:
+                return 1.0 / (actual_warmup_steps + 1)
+            frac = 1.0 - current_step / actual_warmup_steps
+            return (1.0 / (actual_warmup_steps + 1) - 1.0) * frac + 1.0
+
+        step = min(current_step, actual_decay_steps)
+        cosine_decay = 0.5 * (1.0 + math.cos(math.pi * step / actual_decay_steps))
+        alpha = decay_lr / peak_lr
+        return (1.0 - alpha) * cosine_decay + alpha
+
+    return lr_lambda
 
 
 def _grad_norm(parameters: Any, device: torch.device) -> torch.Tensor:
