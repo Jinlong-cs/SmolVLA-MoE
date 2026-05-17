@@ -17,9 +17,15 @@ def main() -> int:
     parser.add_argument("--config", required=True)
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--resume-from", type=str, default=None)
+    parser.add_argument("--output-dir", type=str, default=None)
+    parser.add_argument("--wandb-name", type=str, default=None)
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.output_dir is not None:
+        config["output_dir"] = args.output_dir
+    if args.wandb_name is not None:
+        config.setdefault("train", {}).setdefault("wandb", {})["name"] = args.wandb_name
     train_official_smolvla_moe(config, max_steps_override=args.max_steps, resume_from=args.resume_from)
     return 0
 
