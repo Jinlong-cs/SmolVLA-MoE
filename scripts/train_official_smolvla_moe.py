@@ -16,13 +16,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Train the official SmolVLA checkpoint with residual MoE adapters.")
     parser.add_argument("--config", required=True)
     parser.add_argument("--max-steps", type=int, default=None)
+    parser.add_argument("--resume-from", type=str, default=None)
     args = parser.parse_args()
 
     config = load_config(args.config)
-    train_official_smolvla_moe(config, max_steps_override=args.max_steps)
+    train_official_smolvla_moe(config, max_steps_override=args.max_steps, resume_from=args.resume_from)
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

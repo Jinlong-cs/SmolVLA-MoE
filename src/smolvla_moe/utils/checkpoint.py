@@ -18,3 +18,16 @@ def save_checkpoint(path: str | Path, model: torch.nn.Module, optimizer: torch.o
         },
         path,
     )
+
+
+def load_checkpoint(
+    path: str | Path,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer | None = None,
+    map_location: torch.device | str = "cpu",
+) -> int:
+    checkpoint = torch.load(Path(path), map_location=map_location)
+    model.load_state_dict(checkpoint["model"], strict=True)
+    if optimizer is not None:
+        optimizer.load_state_dict(checkpoint["optimizer"])
+    return int(checkpoint["step"])

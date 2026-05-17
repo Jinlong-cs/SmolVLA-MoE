@@ -15,11 +15,16 @@ from smolvla_moe.official.policy import count_parameters
 from smolvla_moe.training.observability import JsonlLogger
 from smolvla_moe.training.observability import WandbLogger
 from smolvla_moe.training.observability import collect_resource_metrics
+from smolvla_moe.utils.checkpoint import load_checkpoint
 from smolvla_moe.utils.checkpoint import save_checkpoint
 from smolvla_moe.utils.seed import set_seed
 
 
-def train_official_smolvla_moe(config: dict[str, Any], max_steps_override: int | None = None) -> None:
+def train_official_smolvla_moe(
+    config: dict[str, Any],
+    max_steps_override: int | None = None,
+    resume_from: str | Path | None = None,
+) -> None:
     ddp = _distributed_env()
     rank = ddp["rank"]
     world_size = ddp["world_size"]
@@ -47,6 +52,10 @@ def train_official_smolvla_moe(config: dict[str, Any], max_steps_override: int |
         lr=float(train_config.get("learning_rate", 1e-4)),
         weight_decay=float(train_config.get("weight_decay", 0.01)),
     )
+    resume_step = 0
+    if resume_from is not None:
+        resume_step = load_checkpoint(resume_from, _unwrap(model), optimizer, map_location=device)
+        _set_sampler_epoch(data, resume_step)
     amp_dtype = _amp_dtype(train_config.get("amp_dtype"))
     use_amp = device.type == "cuda" and amp_dtype is not None
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp and amp_dtype == torch.float16)
@@ -64,18 +73,19 @@ def train_official_smolvla_moe(config: dict[str, Any], max_steps_override: int |
     if rank == 0:
         run_url = f" wandb_url={wandb_logger.url}" if wandb_logger.url else ""
         print(
-            "device=%s world_size=%d total_params=%s trainable_params=%s patched_layers=%d%s"
+            "device=%s world_size=%d total_params=%s trainable_params=%s patched_layers=%d resume_step=%d%s"
             % (
                 device,
                 world_size,
                 f"{total_params:,}",
                 f"{trainable_params:,}",
                 len(_unwrap(model).patched_layers),
+                resume_step,
                 run_url,
             )
         )
 
-    for step in range(1, max_steps + 1):
+    for step in range(resume_step + 1, max_steps + 1):
         try:
             batch = next(iterator)
         except StopIteration:
