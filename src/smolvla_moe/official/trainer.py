@@ -15,6 +15,7 @@ from smolvla_moe.official.policy import count_parameters
 from smolvla_moe.training.observability import JsonlLogger
 from smolvla_moe.training.observability import WandbLogger
 from smolvla_moe.training.observability import collect_resource_metrics
+from smolvla_moe.training.schedulers import build_scheduler
 from smolvla_moe.utils.checkpoint import load_checkpoint
 from smolvla_moe.utils.checkpoint import save_checkpoint
 from smolvla_moe.utils.seed import set_seed
@@ -50,11 +51,14 @@ def train_official_smolvla_moe(
     optimizer = torch.optim.AdamW(
         (p for p in model.parameters() if p.requires_grad),
         lr=float(train_config.get("learning_rate", 1e-4)),
+        betas=tuple(train_config.get("betas", (0.9, 0.999))),
+        eps=float(train_config.get("eps", 1e-8)),
         weight_decay=float(train_config.get("weight_decay", 0.01)),
     )
+    scheduler = build_scheduler(optimizer, train_config, max_steps)
     resume_step = 0
     if resume_from is not None:
-        resume_step = load_checkpoint(resume_from, _unwrap(model), optimizer, map_location=device)
+        resume_step = load_checkpoint(resume_from, _unwrap(model), optimizer, scheduler, map_location=device)
         _set_sampler_epoch(data, resume_step)
     amp_dtype = _amp_dtype(train_config.get("amp_dtype"))
     use_amp = device.type == "cuda" and amp_dtype is not None
@@ -106,6 +110,8 @@ def train_official_smolvla_moe(
             grad_norm = _grad_norm(model.parameters(), device)
         scaler.step(optimizer)
         scaler.update()
+        if scheduler is not None:
+            scheduler.step()
 
         should_log = step == 1 or (log_every > 0 and step % log_every == 0)
         if should_log:
@@ -133,12 +139,12 @@ def train_official_smolvla_moe(
 
         if rank == 0 and save_every > 0 and step % save_every == 0:
             checkpoint_path = output_dir / "checkpoints" / f"step_{step:06d}.pt"
-            save_checkpoint(checkpoint_path, _unwrap(model), optimizer, step, config)
+            save_checkpoint(checkpoint_path, _unwrap(model), optimizer, step, config, scheduler)
             wandb_logger.log_checkpoint(checkpoint_path, step, aliases=[f"step-{step}"])
 
     if rank == 0 and final_checkpoint:
         final_path = output_dir / "checkpoints" / "final.pt"
-        save_checkpoint(final_path, _unwrap(model), optimizer, max_steps, config)
+        save_checkpoint(final_path, _unwrap(model), optimizer, max_steps, config, scheduler)
         wandb_logger.log_checkpoint(final_path, max_steps, aliases=["final", f"step-{max_steps}"])
     if rank == 0:
         wandb_logger.finish()

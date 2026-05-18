@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1500" height="820" viewBox="0 0 1500 820" role="img" aria-labelledby="title desc">
   <title id="title">Official SmolVLA residual MoE architecture</title>
-  <desc id="desc">A CVPR-style block diagram showing the official HuggingFaceVLA/smolvla_libero policy with frozen dense SmolVLA blocks and trainable residual top-1 MoE adapters inside the official action expert MLPs.</desc>
+  <desc id="desc">A CVPR-style block diagram showing the official HuggingFaceVLA/smolvla_libero policy with frozen dense SmolVLA blocks and trainable residual top-2 MoE adapters inside the official action expert MLPs.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#2f3a4a"/>
@@ -46,7 +46,7 @@
   </defs>
 
   <rect class="bg" width="1500" height="820"/>
-  <text x="750" y="44" text-anchor="middle" class="title">SmolVLA-MoE: Official SmolVLA + Residual Top-1 MoE Adapters</text>
+  <text x="750" y="44" text-anchor="middle" class="title">SmolVLA-MoE: Official SmolVLA + Residual Top-2 MoE Adapters</text>
   <text x="750" y="72" text-anchor="middle" class="caption">This branch preserves HuggingFaceVLA/smolvla_libero and trains sparse residual adapters inside the official action expert MLPs</text>
 
   <rect x="40" y="108" width="286" height="560" class="panel"/>
@@ -115,7 +115,7 @@
 
   <rect x="1234" y="212" width="192" height="64" class="box moe"/>
   <text x="1330" y="240" text-anchor="middle" class="label">Router</text>
-  <text x="1330" y="263" text-anchor="middle" class="tiny trainText">top-1 chunk-level routing</text>
+  <text x="1330" y="263" text-anchor="middle" class="tiny trainText">top-2 chunk-level routing</text>
 
   <rect x="1234" y="324" width="192" height="64" class="box moe"/>
   <text x="1330" y="352" text-anchor="middle" class="label">4 Low-Rank Experts</text>

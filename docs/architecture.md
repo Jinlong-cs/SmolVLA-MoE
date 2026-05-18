@@ -26,7 +26,7 @@ The initial action FFN design is:
 ```text
 Shared SwiGLU expert, always active
 + 4 routed SwiGLU experts
-+ top-1 chunk-level router
++ top-k chunk-level router
 + load-balancing loss
 + router z-loss
 ```
@@ -42,18 +42,32 @@ The only structural change is inside the action expert MLPs:
 
 ```text
 original action-expert MLP
-  -> original action-expert MLP + residual top-k MoE adapter
+  -> original action-expert MLP + residual top-2 MoE adapter
 ```
 
 Default training freezes the official dense path and trains only:
 
-- MoE routers
+- top-2 MoE routers
 - low-rank SwiGLU residual experts
 - residual scale parameters
 
 This is intentionally more conservative than replacing the whole action expert with a sparse decoder. It lets the
 first official-based experiment answer whether sparse residual capacity can improve LIBERO while preserving the
 released dense SmolVLA behavior at initialization.
+
+## Top-2 Official-Scheduler Experiment
+
+The current official-compatible branch default tests whether less brittle collaborative routing improves the
+`libero_spatial` and `libero_10` regressions seen in the earlier top-1 experiment. It keeps the same 4 low-rank residual experts but
+activates the two highest-probability experts per action chunk.
+
+The training optimizer and scheduler are aligned to the official SmolVLA preset:
+
+```text
+AdamW lr=1e-4, betas=(0.9, 0.95), eps=1e-8, weight_decay=1e-10
+grad clip norm=10
+1000-step warmup, cosine decay over 30000 steps to 2.5e-6
+```
 
 ## Benchmark-Agnostic Constraints
 

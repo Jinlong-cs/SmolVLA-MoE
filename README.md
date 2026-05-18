@@ -14,14 +14,14 @@ SmolVLA-MoE is designed around:
 - a dense SmolVLM2-family visual-language backbone,
 - a continuous flow-matching action decoder,
 - a shared + routed sparse MoE FFN inside the action expert,
-- top-1 chunk-level routing for efficient inference,
+- top-k chunk-level routing for efficient inference,
 - W&B and local JSONL observability for reproducible benchmark runs.
 
 This branch also contains the official-compatible path:
 
 ```text
 HuggingFaceVLA/smolvla_libero
-  + residual top-1 MoE adapters in official SmolVLA action-expert MLPs
+  + residual top-2 MoE adapters in official SmolVLA action-expert MLPs
 ```
 
 The official dense SmolVLA module is loaded first and left structurally intact. MoE is enabled only by the
@@ -126,7 +126,7 @@ official SmolVLA VLM + action expert
         v
 each official action-expert MLP becomes:
   frozen official dense MLP(x)
-  + trainable residual_scale * top-1 MoE adapter(x)
+  + trainable residual_scale * top-2 MoE adapter(x)
         |
         v
 continuous action chunk, H=50, A=7
@@ -143,7 +143,7 @@ MoE: which action-decoder expert capacity to use.
 The official branch default MoE adapter is:
 
 ```text
-4 low-rank routed experts + top-1 chunk-level routing + trainable residual scale
+4 low-rank routed experts + top-2 chunk-level routing + trainable residual scale
 ```
 
 By default, the official dense checkpoint is frozen and only the residual MoE routers, low-rank experts, and residual
@@ -156,7 +156,7 @@ The official-compatible path does not replace the official SmolVLA flow model. I
 `HuggingFaceVLA/smolvla_libero`, then wraps each official action-expert MLP as:
 
 ```text
-official dense MLP(x) + residual_scale * top-1 MoE adapter(x)
+official dense MLP(x) + residual_scale * top-2 MoE adapter(x)
 ```
 
 Default behavior freezes the official dense checkpoint and trains only the residual MoE routers, experts, and scales.
@@ -221,7 +221,7 @@ torchrun --standalone --nproc_per_node=8 scripts/train_official_smolvla_moe.py \
 ```
 
 This path starts from `HuggingFaceVLA/smolvla_libero`, uses the official SmolVLA flow/action expert, and only adds
-residual top-1 MoE adapters to the official action-expert MLPs.
+residual top-2 MoE adapters to the official action-expert MLPs.
 
 The default run writes outputs to:
 

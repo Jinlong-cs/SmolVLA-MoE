@@ -38,7 +38,7 @@ torchrun --standalone --nproc_per_node=8 scripts/train_official_smolvla_moe.py \
   --config configs/train/official_smolvla_moe_libero_8gpu.yaml
 ```
 
-This run loads `HuggingFaceVLA/smolvla_libero` first, wraps official action-expert MLPs with residual top-1 MoE
+This run loads `HuggingFaceVLA/smolvla_libero` first, wraps official action-expert MLPs with residual top-2 MoE
 adapters, and freezes the official dense checkpoint by default. The official path reads LIBERO v2 parquet data
 directly and uses the released official normalization stats.
 
@@ -66,15 +66,15 @@ The default W&B run is configured as:
 
 ```text
 project: smolvla-moe-libero
-name: smolvla_moe_full_finetune_libero
-group: libero_8gpu_full_finetune
+name: official_smolvla_moe_residual_top2_official_sched_libero
+group: official_smolvla_moe_residual_top2_official_sched_8gpu
 mode: online
 ```
 
 The script writes the W&B id to:
 
 ```text
-outputs/libero/smolvla_moe_full_finetune/wandb_id.txt
+outputs/libero/official_smolvla_moe_residual_top2_official_sched/wandb_id.txt
 ```
 
 If the same output directory is reused, `resume: allow` will reconnect to the existing W&B run. Use a new `output_dir` or delete that id file when starting a truly new run.

@@ -14,7 +14,7 @@ official_smolvla:
 model:
   official_moe:
     num_experts: 4
-    top_k: 1
+    top_k: 2
     adapter_dim: 256
     init_scale: 1.0
     load_balance_weight: 0.01

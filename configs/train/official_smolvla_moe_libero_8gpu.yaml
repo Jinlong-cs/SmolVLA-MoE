@@ -3,15 +3,25 @@ defaults:
   - ../dataset/libero_official_smolvla.yaml
 
 seed: 7
-output_dir: outputs/libero/official_smolvla_moe_residual_shuffle_zeroout
+output_dir: outputs/libero/official_smolvla_moe_residual_top2_official_sched
 device: cuda
 
 train:
   batch_size: 16
   max_steps: 100000
   learning_rate: 0.0001
-  weight_decay: 0.01
-  grad_clip_norm: 1.0
+  betas:
+    - 0.9
+    - 0.95
+  eps: 1.0e-8
+  weight_decay: 1.0e-10
+  grad_clip_norm: 10.0
+  scheduler:
+    type: cosine_decay_with_warmup
+    peak_lr: 0.0001
+    decay_lr: 0.0000025
+    warmup_steps: 1000
+    decay_steps: 30000
   log_every: 20
   save_every: 5000
   save_final_checkpoint: true
@@ -21,8 +31,8 @@ train:
     enabled: true
     workspace: null
     project: smolvla-moe-libero
-    name: official_smolvla_moe_residual_shuffle_zeroout_libero
-    group: official_smolvla_moe_residual_shuffle_zeroout_8gpu
+    name: official_smolvla_moe_residual_top2_official_sched_libero
+    group: official_smolvla_moe_residual_top2_official_sched_8gpu
     mode: online
     dir: null
     tags:
@@ -30,10 +40,12 @@ train:
       - smolvla-moe
       - libero
       - residual-moe-adapter
+      - top2-routing
+      - official-optimizer-scheduler
       - flow-matching
       - shuffled-data
       - zero-init-residual-output
-    notes: "Official HuggingFaceVLA/smolvla_libero with residual top-1 MoE adapters in the action expert MLPs; shuffled LIBERO data and zero-initialized residual expert output preserve the dense policy at init while allowing adapter gradients."
+    notes: "Official HuggingFaceVLA/smolvla_libero with residual top-2 MoE adapters in the action expert MLPs; optimizer and cosine warmup/decay scheduler match the official SmolVLA training preset while the dense official policy stays frozen."
     resume: allow
     id_file: wandb_id.txt
     log_code: false

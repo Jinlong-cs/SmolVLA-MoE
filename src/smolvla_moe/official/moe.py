@@ -100,7 +100,7 @@ class ResidualTopKMoEAdapter(nn.Module):
         importance = probs.mean(dim=0)
         load_balance_loss = self.num_experts * torch.sum(load * importance)
         router_z_loss = torch.logsumexp(logits, dim=-1).square().mean()
-        expert_usage = selected.mean(dim=0)
+        expert_usage = load
         return {
             "load_balance_loss": load_balance_loss * self.load_balance_weight,
             "router_z_loss": router_z_loss * self.router_z_loss_weight,
